@@ -642,11 +642,8 @@ BEGIN
     END IF;
 
     IF v_caller_role = 'MODERATOR' THEN
-        IF v_market.creator_id = p_caller_id THEN
-            RAISE EXCEPTION 'Un moderador no puede liquidar un mercado creado por él mismo.';
-        END IF;
         IF EXISTS (SELECT 1 FROM public.bets WHERE market_id = p_market_id AND user_id = p_caller_id AND status = 'ACTIVE') THEN
-            RAISE EXCEPTION 'Conflicto de interés: un moderador con apuestas activas en este mercado no puede liquidarlo.';
+            RAISE EXCEPTION 'Conflicto de interés: no puedes certificar un mercado donde tienes apuestas activas.';
         END IF;
     END IF;
 
@@ -949,11 +946,8 @@ BEGIN
     END IF;
 
     IF v_role = 'MODERATOR' THEN
-        IF v_market.creator_id = p_caller_id THEN
-            RAISE EXCEPTION 'Un moderador no puede cancelar un mercado creado por él mismo.';
-        END IF;
         IF EXISTS (SELECT 1 FROM public.bets WHERE market_id = p_market_id AND user_id = p_caller_id AND status = 'ACTIVE') THEN
-            RAISE EXCEPTION 'Conflicto de interés: un moderador con apuestas activas en este mercado no puede cancelarlo.';
+            RAISE EXCEPTION 'Conflicto de interés: no puedes cancelar un mercado donde tienes apuestas activas.';
         END IF;
     END IF;
 

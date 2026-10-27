@@ -90,8 +90,8 @@ export function ModerationPanel({
           <div>
             <h2 className="text-sm font-bold text-white">Sala de moderación</h2>
             <p className="text-[10px] leading-relaxed text-slate-500">
-              Cierra apuestas, certifica ganadores o cancela con reembolso total. Cada acción
-              queda registrada en auditoría.
+              Cierra apuestas, certifica ganadores o cancela con reembolso total. Por integridad,
+              no puedes moderar mercados donde tengas apuestas activas.
             </p>
           </div>
         </div>

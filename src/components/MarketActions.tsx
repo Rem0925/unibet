@@ -150,7 +150,7 @@ export function ResolveMarketModal({
         </button>
 
         <p className="text-[9px] leading-relaxed text-slate-600">
-          Si ningún ticket acertó, se aplica la regla del pozo huérfano. No se puede deshacer.
+          Si ningún ticket acertó, se aplica la regla del pozo huérfano. Por integridad, no puedes liquidar mercados donde tengas apuestas activas.
         </p>
       </form>
     </Modal>
@@ -217,8 +217,8 @@ export function CancelMarketModal({
 
         <div className="flex items-start gap-1.5 rounded border border-[#f43f5e]/25 bg-[#1f1113] px-2.5 py-2 text-[10px] leading-relaxed text-[#fda4af]">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          Cancela solo si el evento no puede resolverse con claridad. La acción queda registrada
-          en auditoría.
+          Cancela solo si el evento no puede resolverse con claridad. Por integridad, no puedes
+          cancelar mercados donde tengas apuestas activas.
         </div>
 
         <div>
