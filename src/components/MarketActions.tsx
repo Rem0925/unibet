@@ -225,12 +225,35 @@ export function CancelMarketModal({
           <label htmlFor="cancel-reason" className="mb-1 block text-[11px] font-bold text-slate-300">
             Motivo de cancelación
           </label>
+          <div className="mb-2 flex flex-wrap gap-1 text-[10px]">
+            <button
+              type="button"
+              onClick={() => setReason('Empate técnico no contemplado en las opciones de apuesta')}
+              className="rounded border border-[#2a3040] bg-[#141822] px-2 py-0.5 text-slate-300 hover:border-slate-400"
+            >
+              🤝 Empate no contemplado
+            </button>
+            <button
+              type="button"
+              onClick={() => setReason('Evento suspendido oficialmente por lluvia o corte eléctrico')}
+              className="rounded border border-[#2a3040] bg-[#141822] px-2 py-0.5 text-slate-300 hover:border-slate-400"
+            >
+              🌧️ Suspendido / Lluvia
+            </button>
+            <button
+              type="button"
+              onClick={() => setReason('Baja de participante o enunciado ambiguo')}
+              className="rounded border border-[#2a3040] bg-[#141822] px-2 py-0.5 text-slate-300 hover:border-slate-400"
+            >
+              ⚠️ Enunciado ambiguo
+            </button>
+          </div>
           <textarea
             id="cancel-reason"
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             maxLength={300}
-            rows={3}
+            rows={2}
             placeholder="Ej: el evento fue suspendido sin resultado oficial."
             className="w-full resize-none rounded border border-[#222736] bg-[#090a0f] px-3 py-2 text-xs text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none"
           />

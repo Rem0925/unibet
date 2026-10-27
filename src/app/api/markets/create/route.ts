@@ -4,6 +4,7 @@ import { requireUser } from '@/lib/server/auth';
 import { jsonError, parseBody } from '@/lib/server/http';
 import { enforceRateLimit } from '@/lib/server/rate-limit';
 import { getServiceSupabase } from '@/lib/server/supabase';
+import { notifyNewMarket } from '@/lib/server/telegram';
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,6 +37,15 @@ export async function POST(request: NextRequest) {
       console.error('[markets] Error creando mercado:', error);
       throw new Error('No se pudo crear el mercado');
     }
+
+    // Notificar en Telegram en segundo plano (si está configurado)
+    notifyNewMarket({
+      title,
+      creator: profile.username,
+      category,
+      options,
+      closeTime,
+    }).catch(() => {});
 
     return NextResponse.json({
       success: true,

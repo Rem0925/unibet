@@ -6,6 +6,7 @@ import { jsonError, parseBody } from '@/lib/server/http';
 import { enforceRateLimit } from '@/lib/server/rate-limit';
 import { throwRpcError } from '@/lib/server/rpc';
 import { getServiceSupabase } from '@/lib/server/supabase';
+import { notifyMarketCancelled } from '@/lib/server/telegram';
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,6 +30,20 @@ export async function POST(request: NextRequest) {
       action: 'MARKET_CANCELLED',
       metadata: { marketId, reason, result: data },
     });
+
+    // Notificar en Telegram (si está configurado)
+    const { data: marketData } = await getServiceSupabase()
+      .from('markets')
+      .select('title')
+      .eq('id', marketId)
+      .single();
+
+    if (marketData) {
+      notifyMarketCancelled({
+        title: marketData.title,
+        reason,
+      }).catch(() => {});
+    }
 
     return NextResponse.json({
       success: true,

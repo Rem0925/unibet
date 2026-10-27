@@ -166,9 +166,12 @@ export function CreateMarketModal({
           <div>
             <label
               htmlFor="market-close"
-              className="mb-1 flex items-center gap-1 text-[11px] font-bold text-slate-300"
+              className="mb-1 flex items-center justify-between text-[11px] font-bold text-slate-300"
             >
-              <CalendarClock className="h-3 w-3" /> Cierre de apuestas
+              <span className="flex items-center gap-1">
+                <CalendarClock className="h-3 w-3" /> Cierre de apuestas
+              </span>
+              <span className="font-normal text-[10px] text-slate-500">Hora local (UTC-4)</span>
             </label>
             <input
               id="market-close"
@@ -200,9 +203,14 @@ export function CreateMarketModal({
 
         <div>
           <div className="mb-1 flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-300">
-              Opciones ({MIN_OPTIONS}-{MAX_OPTIONS})
-            </span>
+            <div>
+              <span className="text-[11px] font-bold text-slate-300">
+                Opciones ({MIN_OPTIONS}-{MAX_OPTIONS})
+              </span>
+              <span className="block text-[9px] text-slate-500">
+                En deportes que admiten empate (ej. fútbol), añade la opción &quot;Empate&quot;.
+              </span>
+            </div>
             <button
               type="button"
               onClick={addOption}

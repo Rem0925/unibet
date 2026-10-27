@@ -6,6 +6,7 @@ import { jsonError, parseBody } from '@/lib/server/http';
 import { enforceRateLimit } from '@/lib/server/rate-limit';
 import { throwRpcError } from '@/lib/server/rpc';
 import { getServiceSupabase } from '@/lib/server/supabase';
+import { notifyMarketResolved } from '@/lib/server/telegram';
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,6 +30,21 @@ export async function POST(request: NextRequest) {
       action: 'MARKET_RESOLVED',
       metadata: { marketId, winningOption, result: data },
     });
+
+    // Notificar en Telegram (si está configurado)
+    const { data: marketData } = await getServiceSupabase()
+      .from('markets')
+      .select('title, total_pool')
+      .eq('id', marketId)
+      .single();
+
+    if (marketData) {
+      notifyMarketResolved({
+        title: marketData.title,
+        winner: winningOption,
+        totalPool: Number(marketData.total_pool) || 0,
+      }).catch(() => {});
+    }
 
     return NextResponse.json({
       success: true,
