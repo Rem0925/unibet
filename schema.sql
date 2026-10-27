@@ -1,8 +1,10 @@
 -- ====================================================================
 -- UniBet — Esquema blindado para apuestas pari-mutuel (USDT / Binance Pay)
 -- Reglas financieras:
---   1. Comisión del 3% cobrada al RECARGAR (0% dentro de las apuestas).
---   2. El 100% del pozo se reparte entre los ganadores.
+--   1. Comisión del 1.5% cobrada al RECARGAR (0% dentro de las apuestas).
+--   2. El 100% del pozo se reparte entre los ganadores, con un TOPE DE
+--      MULTIPLICADOR de 20x: si el pozo pagaría más de 20x, el excedente
+--      va íntegro a la casa (HOUSE_WIN).
 --   3. Si gana una opción sin apuestas: 70% Casa + 30% creador.
 -- ====================================================================
 -- Ejecutar este archivo completo en el SQL Editor de Supabase. Es
@@ -397,7 +399,7 @@ GROUP BY b.market_id, b.selected_option;
 -- PROCEDIMIENTOS ALMACENADOS
 -- ====================================================================
 
--- 1. Acreditar depósito de Binance Pay (3% de comisión de entrada).
+-- 1. Acreditar depósito de Binance Pay (1.5% de comisión de entrada).
 --    La transacción PENDING creada por /api/wallet/deposit es la fuente de
 --    verdad del usuario y del monto; el webhook no puede inventar una orden.
 DROP FUNCTION IF EXISTS public.fn_credit_deposit(UUID, NUMERIC, TEXT);
@@ -467,7 +469,9 @@ BEGIN
         -- fondos del usuario. El fee se activa al crear el primer admin.
         v_fee_amount := 0;
     ELSE
-        v_fee_amount := ROUND(p_gross_amount * 0.03, 4);
+        -- 1.5%: cubre costos de operación sin castigar al usuario. Si algún
+        -- día cambia, ajustar también DEPOSIT_FEE_RATE en src/lib/constants.ts.
+        v_fee_amount := ROUND(p_gross_amount * 0.015, 4);
     END IF;
 
     v_net_amount := p_gross_amount - v_fee_amount;
@@ -664,6 +668,9 @@ DECLARE
     v_bet RECORD;
     v_user_payout NUMERIC(18, 4);
     v_remaining_pool NUMERIC(18, 4);
+    v_payout_multiplier NUMERIC(18, 4);
+    v_distributable_pool NUMERIC(18, 4);
+    v_house_surplus NUMERIC(18, 4) := 0;
     v_creator_cut NUMERIC(18, 4) := 0;
     v_house_cut NUMERIC(18, 4) := 0;
     v_loser_count INTEGER := 0;
@@ -786,10 +793,33 @@ BEGIN
 
     -- ================================================================
     -- CASO NORMAL: HAY GANADORES
-    -- El último ganador recibe el remanente exacto para que la suma de
-    -- los pagos sea igual al pozo, sin polvo por redondeo.
+    -- Multiplicador con TOPE de 20x: si el pozo crudo pagaría más que el
+    -- tope, el excedente va íntegro a la casa (HOUSE_WIN). Sin admin
+    -- activo no hay casa que reciba el excedente, así que se liquida sin
+    -- tope para no perder fondos de los ganadores (misma política que la
+    -- comisión de recarga). El último ganador recibe el remanente exacto
+    -- del pool distribuible, sin polvo por redondeo.
     -- ================================================================
-    v_remaining_pool := v_market.total_pool;
+    IF v_admin_id IS NULL THEN
+        v_payout_multiplier := v_market.total_pool / v_total_winning_pool;
+    ELSE
+        v_payout_multiplier := LEAST(v_market.total_pool / v_total_winning_pool, 20.0000);
+    END IF;
+
+    v_distributable_pool := LEAST(
+        ROUND(v_total_winning_pool * v_payout_multiplier, 4),
+        v_market.total_pool
+    );
+    v_house_surplus := ROUND(v_market.total_pool - v_distributable_pool, 4);
+
+    -- Polvo de redondeo (< 1 centavo) mejor para los ganadores que como
+    -- transacción fantasma para la casa.
+    IF v_house_surplus < 0.01 THEN
+        v_distributable_pool := v_market.total_pool;
+        v_house_surplus := 0;
+    END IF;
+
+    v_remaining_pool := v_distributable_pool;
 
     FOR v_bet IN
         SELECT *
@@ -804,7 +834,7 @@ BEGIN
                 v_user_payout := v_remaining_pool;
             ELSE
                 v_user_payout := ROUND(
-                    (v_bet.amount / v_total_winning_pool) * v_market.total_pool,
+                    (v_bet.amount / v_total_winning_pool) * v_distributable_pool,
                     4
                 );
                 IF v_user_payout > v_remaining_pool THEN
@@ -841,6 +871,33 @@ BEGIN
         END IF;
     END LOOP;
 
+    -- Excedente del tope de multiplicador: el resto del pozo se lo queda
+    -- la casa (el primer admin activo), tal como el usuario pidió.
+    IF v_house_surplus > 0 AND v_admin_id IS NOT NULL THEN
+        UPDATE public.users
+        SET balance = balance + v_house_surplus,
+            updated_at = timezone('utc'::text, now())
+        WHERE id = v_admin_id;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Administrador de la casa no encontrado';
+        END IF;
+
+        INSERT INTO public.transactions (user_id, type, amount, status, metadata)
+        VALUES (
+            v_admin_id,
+            'HOUSE_WIN',
+            v_house_surplus,
+            'COMPLETED',
+            jsonb_build_object(
+                'market_id', p_market_id,
+                'note', 'Excedente del tope de multiplicador (20x)',
+                'winning_pool', v_total_winning_pool,
+                'raw_multiplier', ROUND(v_market.total_pool / v_total_winning_pool, 4)
+            )
+        );
+    END IF;
+
     UPDATE public.markets
     SET status = 'RESOLVED',
         winning_option = p_winning_option,
@@ -851,7 +908,8 @@ BEGIN
         'success', true,
         'case', 'WINNERS_PAID',
         'winning_bets', v_winner_count,
-        'distributed', v_market.total_pool
+        'distributed', v_distributable_pool,
+        'house_surplus', v_house_surplus
     );
 END;
 $$;
@@ -1065,7 +1123,7 @@ BEGIN
 END;
 $$;
 
--- 7. Reembolsar un retiro fallido SIN cobrar la comisión del 3%.
+-- 7. Reembolsar un retiro fallido SIN cobrar comisión.
 DROP FUNCTION IF EXISTS public.fn_refund_withdrawal(UUID, NUMERIC, TEXT, TEXT);
 
 CREATE OR REPLACE FUNCTION public.fn_refund_withdrawal(
@@ -1421,4 +1479,10 @@ REVOKE ALL ON FUNCTION public.fn_set_updated_at() FROM PUBLIC;
 --    con fn_fail_deposit.
 -- 5. Tope por usuario/mercado: máximo 150 USDT activos por persona en un
 --    mismo mercado (fn_place_bet). Ajusta ese valor si el círculo crece.
+-- 6. Tope de multiplicador: 20x máximo al liquidar (fn_resolve_market).
+--    El excedente va a la casa como HOUSE_WIN. Para cambiarlo, ajusta el
+--    literal 20.0000 en fn_resolve_market y PAYOUT_MULTIPLIER_CAP en
+--    src/lib/constants.ts (deben coincidir).
+-- 7. Comisión de recarga: 1.5% (fn_credit_deposit). Para cambiarla, ajusta
+--    el literal 0.015 y DEPOSIT_FEE_RATE en src/lib/constants.ts.
 -- ====================================================================

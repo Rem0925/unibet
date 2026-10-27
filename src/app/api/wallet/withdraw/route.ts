@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(response, { status: 202 });
       }
 
-      // Error definitivo: Binance rechazó el pago. Reembolsamos sin 3%.
+      // Error definitivo: Binance rechazó el pago. Reembolsamos sin comisión.
       console.error('[withdraw] Binance rechazó el retiro; reembolsando:', {
         requestId,
         error: payoutError,

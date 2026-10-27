@@ -31,6 +31,7 @@ export function DepositModal({
   const gross = Number.parseFloat(amount) || 0;
   const fee = useMemo(() => Math.round(gross * DEPOSIT_FEE_RATE * 100) / 100, [gross]);
   const net = Math.max(0, gross - fee);
+  const feePercent = (DEPOSIT_FEE_RATE * 100).toFixed(1).replace(/\.0$/, '');
 
   useEffect(() => {
     if (!order || paid) return;
@@ -114,7 +115,7 @@ export function DepositModal({
   return (
     <Modal
       title="Recargar con Binance Pay"
-      subtitle="Comisión única del 3% al recargar. El 100% del pozo se reparte dentro de los mercados."
+      subtitle={`Comisión única del ${feePercent}% al recargar. El 100% del pozo se reparte dentro de los mercados.`}
       icon={<QrCode className="h-4 w-4 text-[#00f090]" />}
       onClose={onClose}
     >
@@ -164,7 +165,7 @@ export function DepositModal({
               <span className="text-white">${formatUsdt(gross)} USDT</span>
             </div>
             <div className="flex justify-between text-slate-500">
-              <span>Comisión casa (3%):</span>
+              <span>Comisión casa ({feePercent}%):</span>
               <span>-${formatUsdt(fee)} USDT</span>
             </div>
             <div className="flex justify-between border-t border-[#1e2330] pt-1 font-bold text-white">
@@ -244,7 +245,7 @@ export function DepositModal({
               <span className="text-white">${formatUsdt(gross)} USDT</span>
             </div>
             <div className="flex justify-between text-slate-500">
-              <span>Comisión casa (3%):</span>
+              <span>Comisión casa ({feePercent}%):</span>
               <span>-${formatUsdt(fee)} USDT</span>
             </div>
             <div className="flex justify-between border-t border-[#1e2330] pt-1 font-bold text-white">

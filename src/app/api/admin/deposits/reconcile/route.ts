@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: `Pago confirmado por Binance. Depósito acreditado (${order.totalFee} USDT brutos, menos la comisión del 3%).`,
+        message: `Pago confirmado por Binance. Depósito acreditado (${order.totalFee} USDT brutos, menos la comisión del 1.5%).`,
       });
     }
 

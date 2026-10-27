@@ -1,4 +1,5 @@
 import Decimal from 'decimal.js';
+import { PAYOUT_MULTIPLIER_CAP } from './constants';
 import type { MarketOdds, OptionOdds } from './types';
 
 export interface BetTicket {
@@ -7,6 +8,7 @@ export interface BetTicket {
 }
 
 const ZERO = new Decimal(0);
+const MULTIPLIER_CAP = new Decimal(PAYOUT_MULTIPLIER_CAP);
 
 function buildOdds(poolsByOption: Record<string, Decimal>, totalPool: Decimal, options: string[]): MarketOdds {
   const optionsOdds: Record<string, OptionOdds> = {};
@@ -34,10 +36,15 @@ function buildOdds(poolsByOption: Record<string, Decimal>, totalPool: Decimal, o
       continue;
     }
 
+    // El multiplicador mostrado respeta el tope de liquidación: nunca se
+    // promete en pantalla algo que la base de datos no va a pagar.
+    const rawMultiplier = totalPool.dividedBy(optionPool);
+    const multiplier = rawMultiplier.gt(MULTIPLIER_CAP) ? MULTIPLIER_CAP : rawMultiplier;
+
     optionsOdds[option] = {
       pool: optionPool.toFixed(2),
       percentage: `${percentage.toFixed(1)}%`,
-      multiplier: `${totalPool.dividedBy(optionPool).toFixed(2)}x`,
+      multiplier: `${multiplier.toFixed(2)}x`,
     };
   }
 
@@ -123,7 +130,12 @@ export function estimateBetPayout(params: {
 
   const projectedTotal = totalPool.plus(amount);
   const projectedOption = optionPool.plus(amount);
-  const multiplier = projectedOption.isZero() ? new Decimal(1) : projectedTotal.dividedBy(projectedOption);
+  let multiplier = projectedOption.isZero() ? new Decimal(1) : projectedTotal.dividedBy(projectedOption);
+  // El tope de multiplicador es la misma regla que aplica fn_resolve_market:
+  // la proyección no puede prometer un pago que la liquidación recortará.
+  if (multiplier.gt(MULTIPLIER_CAP)) {
+    multiplier = MULTIPLIER_CAP;
+  }
   const payout = amount.times(multiplier);
 
   return {

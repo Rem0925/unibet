@@ -94,6 +94,49 @@ describe('calculatePariMutuelOdds', () => {
   });
 });
 
+describe('Tope de multiplicador (PAYOUT_MULTIPLIER_CAP)', () => {
+  it('recorta las cuotas mostradas al tope de 20x', () => {
+    const odds = calculatePariMutuelOddsFromPools(['A', 'B'], { A: 500, B: 1 });
+
+    // Crudo sería 501x; el tope es lo que fn_resolve_market pagará de verdad.
+    expect(odds.optionsOdds.B.multiplier).toBe('20.00x');
+    expect(odds.optionsOdds.A.multiplier).toBe('1.00x');
+  });
+
+  it('no recorta cuotas por debajo del tope', () => {
+    const odds = calculatePariMutuelOddsFromPools(['A', 'B'], { A: 75, B: 25 });
+
+    expect(odds.optionsOdds.A.multiplier).toBe('1.33x');
+    expect(odds.optionsOdds.B.multiplier).toBe('4.00x');
+  });
+
+  it('proyecta el pago con el tope aplicado', () => {
+    const estimate = estimateBetPayout({
+      amount: 10,
+      totalPool: 1000,
+      optionPool: 5,
+    });
+
+    // Crudo: 1010/15 = 67.33x → se liquida a 20x.
+    expect(estimate.multiplier).toBe('20.00x');
+    expect(estimate.payout).toBe('200.00');
+    expect(estimate.profit).toBe('190.00');
+  });
+
+  it('primer ticket diluyendo un pozo grande paga exactamente el tope', () => {
+    const estimate = estimateBetPayout({
+      amount: 1,
+      totalPool: 500,
+      optionPool: 0,
+    });
+
+    // Crudo: 501/1 = 501x → tope 20x.
+    expect(estimate.multiplier).toBe('20.00x');
+    expect(estimate.payout).toBe('20.00');
+    expect(estimate.profit).toBe('19.00');
+  });
+});
+
 describe('estimateBetPayout', () => {
   it('proyecta el pago diluyendo el ticket en el pozo', () => {
     const estimate = estimateBetPayout({

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { AlertTriangle, Info, Wallet, X } from 'lucide-react';
-import { BET_MAX, BET_MIN, BET_USER_MARKET_MAX } from '@/lib/constants';
+import { BET_MAX, BET_MIN, BET_USER_MARKET_MAX, PAYOUT_MULTIPLIER_CAP } from '@/lib/constants';
 import { formatUsdt } from '@/lib/format';
 import { estimateBetPayout } from '@/lib/odds';
 import type { MarketSummary } from '@/lib/types';
@@ -151,8 +151,8 @@ export function BetSlip({
           ) : null}
           <div className="mb-2 flex items-start gap-1.5 rounded border border-[#1d222e] bg-[#0c0e14] px-2 py-1.5 text-[10px] leading-relaxed text-slate-500">
             <Info className="mt-0.5 h-3 w-3 shrink-0 text-[#00f090]" />
-            La cuota es estimada: se recalcula con el pozo hasta el cierre. Máximo
-            $${BET_USER_MARKET_MAX} USDT activos por persona en este mercado.
+            Cuota estimada con tope de {PAYOUT_MULTIPLIER_CAP}x (el excedente va a la casa).
+            Máximo $${BET_USER_MARKET_MAX} USDT activos por persona en este mercado.
           </div>
         </>
       )}

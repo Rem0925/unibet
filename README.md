@@ -2,7 +2,7 @@
 
 Aplicación web de apuestas sociales para un círculo cerrado: los usuarios crean mercados de predicción, apostan USDT a una opción y el **100% del pozo** se reparte entre quienes acertaron. Recargas y retiros con **Binance Pay**, perfiles y autenticación con **Supabase**, y toda la lógica de dinero ejecutándose en PostgreSQL con funciones `SECURITY DEFINER`.
 
-> ⚠️ **Aviso legal y de riesgo.** UniBet es software libre (licencia MIT) provisto **tal cual, sin garantía de ningún tipo**. Operar una plataforma de apuestas está regulado o prohibido en muchas jurisdicciones: verificar y cumplir la normativa local (licencias, KYC/AML, impuestos) es responsabilidad exclusiva de quien la despliegue y opere. El software no promueve el juego como fuente de ingresos; la cuota del juego es el pozo compartido entre los propios usuarios, y la casa solo cobra 3% al recargar. Usa montos pequeños y con fines recreativos.
+> ⚠️ **Aviso legal y de riesgo.** UniBet es software libre (licencia MIT) provisto **tal cual, sin garantía de ningún tipo**. Operar una plataforma de apuestas está regulado o prohibido en muchas jurisdicciones: verificar y cumplir la normativa local (licencias, KYC/AML, impuestos) es responsabilidad exclusiva de quien la despliegue y opere. El software no promueve el juego como fuente de ingresos; la cuota del juego es el pozo compartido entre los propios usuarios, y la casa solo cobra 1.5% al recargar. Usa montos pequeños y con fines recreativos.
 >
 > ⚠️ **Dinero real.** Esta app mueve USDT reales. Revísala, ejecuta el esquema SQL completo y prueba los flujos de Binance con montos pequeños antes de abrirla a usuarios.
 
@@ -11,7 +11,8 @@ Aplicación web de apuestas sociales para un círculo cerrado: los usuarios crea
 | Regla | Detalle |
 | :--- | :--- |
 | Pari-mutuel | Multiplicador = pozo total / pozo de la opción. La casa no paga de su bolsillo. |
-| Comisión única | **3% solo al recargar** (credita al admin activo como `FEE_DEPOSIT`). 0% en apuestas y retiros. |
+| Tope de cuota | Multiplicador máximo de **20x**: si el pozo crudo pagaría más, el excedente va íntegro a la casa (`HOUSE_WIN`). |
+| Comisión única | **1.5% solo al recargar** (credita al admin activo como `FEE_DEPOSIT`). 0% en apuestas y retiros. |
 | Batacazo huérfano | Si gana una opción sin apuestas: **70% casa / 30% creador** del mercado. |
 | Límites | Apuesta 0.50–500 · **Tope de 150 USDT activos por persona y mercado** · Depósito 1–1000 · Retiro 1–200 USDT · 2–10 opciones · máx. 365 días. |
 | Reconciliación | Retiros inciertos y depósitos con webhook perdido se revisan en el panel admin: verificación contra Binance (`order/query`), acreditación idempotente o cierre sin pagar. |
@@ -67,7 +68,7 @@ En el Merchant Portal configura el webhook:
 https://tu-dominio.com/api/webhooks/binance
 ```
 
-Evento requerido: `PAY_SUCCESS`. Los depósitos nacen como transacción `PENDING` con un `reference_id` que viaja como `merchantTradeNo`; el webhook lo valida (RSA-SHA256) y acredita el 97% de forma idempotente.
+Evento requerido: `PAY_SUCCESS`. Los depósitos nacen como transacción `PENDING` con un `reference_id` que viaja como `merchantTradeNo`; el webhook lo valida (RSA-SHA256) y acredita el 98.5% de forma idempotente.
 
 ### 4. Desarrollo
 

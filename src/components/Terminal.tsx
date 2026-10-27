@@ -415,7 +415,7 @@ export function Terminal({
                   />
                   <HeroStat
                     label="Comisión de entrada"
-                    value="3%"
+                    value="1.5%"
                     hint="Solo al recargar"
                     tone="text-[#fbbf24]"
                   />
@@ -522,7 +522,7 @@ export function Terminal({
                   </li>
                   <li className="flex gap-1.5">
                     <span className="text-[#00f090]">02</span>
-                    La comisión del 3% se cobra una sola vez al recargar USDT.
+                    La comisión del 1.5% se cobra una sola vez al recargar USDT.
                   </li>
                   <li className="flex gap-1.5">
                     <span className="text-[#f59e0b]">03</span>

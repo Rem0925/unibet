@@ -230,7 +230,7 @@ export function AdminDashboard({
           />
           <MetricCard
             icon={<Receipt className="h-3.5 w-3.5" />}
-            label="Comisiones 3%"
+            label="Comisiones 1.5%"
             value={`$${formatUsdt(stats.houseFees)}`}
             hint="Acumulado por recargas"
             tone="text-[#00f090]"

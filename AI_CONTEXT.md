@@ -15,23 +15,24 @@
 
 ---
 
-## 2. Modelo Matemático y Reglas Financieras (INVARIABLES)
+## 2. Modelo Matemático y Reglas Financieras (REGLAS DE ORO)
 
 El sistema **NO** es una casa de apuestas con cuotas fijas. Es **Pari-Mutuel (pozo mutuo)**:
 
 ```
-[Dinero de los Apostadores] ──► [Pozo del Mercado] ──► [Reparto íntegro a los ganadores]
+[Dinero de los Apostadores] ──► [Pozo del Mercado] ──► [Reparto a los ganadores · tope 20x, excedente a la casa]
 ```
 
 ### A. Cuotas vivas
 * Multiplicador de la opción X = Pozo total del mercado / Total apostado a la opción X.
-* El cliente solo *proyecta* el pago (`estimateBetPayout` en `src/lib/odds.ts` con `decimal.js`); la liquidación real la ejecuta PostgreSQL.
+* **Tope de multiplicador (`PAYOUT_MULTIPLIER_CAP` = 20x):** si el pozo crudo pagaría más de 20x, la liquidación paga 20x y el **excedente va íntegro a la casa** (`HOUSE_WIN` en `fn_resolve_market`). El cliente muestra la cuota ya recortada: nunca promete en pantalla algo que la DB no pagará. Sin admin activo, la liquidación se hace sin tope para no perder fondos de los ganadores (misma política que la comisión).
+* El cliente solo *proyecta* el pago (`estimateBetPayout` en `src/lib/odds.ts` con `decimal.js`, respetando el tope); la liquidación real la ejecuta PostgreSQL.
 * Si todo el dinero entra a una sola opción, el multiplicador es estrictamente **1.00x** (los apostadores recuperan su monto, no hay ganancia).
-* En la liquidación, el último ganador recibe el remanente exacto del pozo para que la suma de pagos sea idéntica al pozo, sin polvo de redondeo (ver `fn_resolve_market`).
+* En la liquidación, el último ganador recibe el remanente exacto del pool distribuible para que la suma de pagos sea idéntica, sin polvo de redondeo (ver `fn_resolve_market`).
 
 ### B. Comisiones
-* **3% único al RECARGAR:** depósito de $10 → $0.30 de comisión (va a la cuenta del primer ADMIN activo, transacción `FEE_DEPOSIT`) y $9.70 netos al usuario. Si aún no existe ningún admin, se acredita el 100% para no perder fondos del usuario.
-* **0% dentro de los mercados:** el 100% del pozo va a los ganadores.
+* **1.5% único al RECARGAR:** depósito de $10 → $0.15 de comisión (va a la cuenta del primer ADMIN activo, transacción `FEE_DEPOSIT`) y $9.85 netos al usuario. Si aún no existe ningún admin, se acredita el 100% para no perder fondos del usuario.
+* **0% dentro de los mercados:** el 100% del pozo va a los ganadores (con el tope de multiplicador, cuyo excedente es la única participación de la casa en un mercado).
 * **0% al retirar:** el payout de Binance Pay no cobra comisión de la app.
 
 ### C. Regla del batacazo huérfano
@@ -42,6 +43,8 @@ Si gana una opción con **$0 apostado**:
 
 ### D. Límites operativos (`src/lib/constants.ts`)
 * Apuesta: **0.50 – 500.00 USDT** · Depósito: **1 – 1000 USDT** · Retiro: **1 – 200 USDT**.
+* **Comisión de recarga (`DEPOSIT_FEE_RATE`): 1.5%** — el literal `0.015` vive en `fn_credit_deposit` y DEBE coincidir.
+* **Tope de multiplicador (`PAYOUT_MULTIPLIER_CAP`): 20x** — el excedente del pozo va a la casa; el literal `20.0000` vive en `fn_resolve_market` y DEBE coincidir.
 * **Tope por usuario/mercado (`BET_USER_MARKET_MAX`): máximo 150 USDT activos por persona en un mismo mercado** (`fn_place_bet` lo valida atómicamente con las filas del usuario bloqueadas). Anti-ballena: ninguna cuenta puede distorsionar las cuotas con volumen desproporcionado ni "snipear" el pozo en el último segundo.
 * Opciones por mercado: **2–10** · Vigencia máxima: **365 días** · Creación de mercados: **10 por hora y usuario** (rate limit por instancia).
 * Estrictamente 2 decimales en los montos (validado con Zod `multipleOf(0.01)`; verificado con pruebas unitarias que Zod 4 lo maneja sin error de coma flotante).
@@ -54,7 +57,7 @@ Si gana una opción con **$0 apostado**:
 
 | Rol | Puede | No puede |
 | :--- | :--- | :--- |
-| **ADMIN** | Todo lo del moderador + panel financiero (`/api/admin/overview`): saldos totales, pozos activos, comisiones 3%, ganancias casa/creadores, saldo esperado en Binance, retiros y depósitos pendientes (conciliar), usuarios (roles/suspensión) y auditoría. | Autodemotearse o suspenderse; dejar el sistema sin admins activos (lo impide `fn_admin_update_user`). |
+| **ADMIN** | Todo lo del moderador + panel financiero (`/api/admin/overview`): saldos totales, pozos activos, comisiones 1.5%, ganancias casa/creadores, saldo esperado en Binance, retiros y depósitos pendientes (conciliar), usuarios (roles/suspensión) y auditoría. | Autodemotearse o suspenderse; dejar el sistema sin admins activos (lo impide `fn_admin_update_user`). |
 | **MODERATOR** | Crear mercados oficiales (`is_official`), cerrar apuestas, liquidar ganadores, cancelar con reembolso 100%. Todo queda en `audit_logs`. | **Cero acceso a finanzas:** el dashboard admin le devuelve 403 (`requireRole('ADMIN')`). No ve retiros ni saldos de la casa. |
 | **USER** | Apostar, crear mercados propios (gana el 30% si ocurre un batacazo huérfano), recargar y retirar. | Cerrar/liquidar/cancelar mercados (ni los propios). |
 
@@ -106,7 +109,7 @@ Si gana una opción con **$0 apostado**:
 4. **Webhook Binance verificado con RSA-SHA256 asíncrono** (`crypto.verify`), seleccionando el certificado por la cabecera `Binancepay-Certificate-SN` contra los certificados publicados por Binance (`/binancepay/openapi/certificates`). Opcionalmente se puede fijar `BINANCE_PAY_CERT_SN` y/o `BINANCE_PAY_PUBLIC_KEY`. El cuerpo se lee SIEMPRE con `request.text()` (raw) antes de cualquier parseo. No hay fallback HMAC para webhooks.
 5. **Idempotencia estricta:** depósitos y retiros nacen como transacción `PENDING` con `reference_id` único en la DB; el webhook solo acredita contra esa orden precreada (`fn_credit_deposit` es seguro ante reintentos) y Binance recibe `merchantTradeNo` = esa referencia.
 6. **Retiros:** el saldo se descuenta atómicamente ANTES de llamar a Binance. Si Binance rechaza definitivamente el payout → reembolso automático del 100% sin comisión (`fn_refund_withdrawal`, el retiro queda `FAILED` + transacción `REFUND`). Si el resultado de red es incierto → la transacción queda `PENDING` y un ADMIN concilia desde el panel (completar o reembolsar vía `/api/admin/withdrawals/reconcile`), dejando nota en auditoría.
-7. **Reconciliación de depósitos:** si el webhook no llega, la recarga queda `PENDING` y aparece en la pestaña DEPÓSITOS del panel admin. «Verificar» consulta a Binance (`/binancepay/openapi/v3/order/query` con `merchantTradeNo`): si es `PAY_SUCCESS` acredita vía `fn_credit_deposit` (idempotente, el 97% tras la comisión), si es un estado terminal (`PAY_FAIL`, `PAY_CLOSED`, `PAY_OVER_TIME`, `PAY_TIMEOUT`) lo cierra con `fn_fail_deposit`; estados en proceso no generan decisión. «Marcar fallido» cierra la orden manualmente sin acreditar. Todo queda en `audit_logs`.
+7. **Reconciliación de depósitos:** si el webhook no llega, la recarga queda `PENDING` y aparece en la pestaña DEPÓSITOS del panel admin. «Verificar» consulta a Binance (`/binancepay/openapi/v3/order/query` con `merchantTradeNo`): si es `PAY_SUCCESS` acredita vía `fn_credit_deposit` (idempotente, el 98.5% tras la comisión), si es un estado terminal (`PAY_FAIL`, `PAY_CLOSED`, `PAY_OVER_TIME`, `PAY_TIMEOUT`) lo cierra con `fn_fail_deposit`; estados en proceso no generan decisión. «Marcar fallido» cierra la orden manualmente sin acreditar. Todo queda en `audit_logs`.
 8. **Precisión decimal:** `NUMERIC(18,4)` en SQL, `decimal.js` en TypeScript. Nada de float puro para dinero.
 9. **Cabeceras de seguridad + CSP** en `next.config.ts` (frame-ancestors none, object-src none, connect-src limitado a Supabase, `upgrade-insecure-requests` en producción). Los route handlers responden `Cache-Control: no-store`.
 10. **`schema.sql` es idempotente y también migra bases de datos antiguas:** la sección "MIGRACIÓN SEGURA PARA BASES DE DATOS ANTIGUAS" añade columnas faltantes (`ADD COLUMN IF NOT EXISTS`), reemplaza CHECKs heredados por las reglas con nombre estable y garantiza la unicidad de `reference_id`/`username`/`email`. Si hay datos legado que violan las reglas nuevas, la migración falla con mensaje claro (no silencia datos sucios).
