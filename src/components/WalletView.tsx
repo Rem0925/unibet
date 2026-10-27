@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -8,10 +8,12 @@ import {
   History,
   Info,
   Wallet,
+  X,
 } from 'lucide-react';
 import { formatDate, formatUsdt } from '@/lib/format';
-import type { TransactionRecord, TransactionType, UserProfile } from '@/lib/types';
-import { EmptyState, ErrorBanner } from './ui';
+import { apiFetch, errorMessage } from '@/lib/api-client';
+import type { MeResponse, TransactionRecord, TransactionType, UserProfile } from '@/lib/types';
+import { EmptyState, ErrorBanner, Spinner } from './ui';
 
 const typeLabel: Record<TransactionType, string> = {
   DEPOSIT: 'Recarga',
@@ -57,6 +59,7 @@ export function WalletView({
   onRetry,
   onDeposit,
   onWithdraw,
+  onRefreshProfile,
 }: {
   profile: UserProfile;
   transactions: TransactionRecord[];
@@ -65,8 +68,46 @@ export function WalletView({
   onRetry: () => void;
   onDeposit: () => void;
   onWithdraw: () => void;
+  onRefreshProfile?: () => Promise<UserProfile>;
 }) {
+  const [editingUid, setEditingUid] = useState(false);
+  const [uidInput, setUidInput] = useState(profile.binanceUid ?? '');
+  const [savingUid, setSavingUid] = useState(false);
+  const [uidError, setUidError] = useState<string | null>(null);
+
   const balance = Number.parseFloat(profile.balance) || 0;
+
+  const handleSaveUid = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUidError(null);
+    const clean = uidInput.trim();
+
+    if (!clean) {
+      setUidError('Ingresa tu Binance Pay UID.');
+      return;
+    }
+
+    if (!/^[0-9]{8,10}$/.test(clean)) {
+      setUidError('El UID debe ser numérico y contener entre 8 y 10 dígitos.');
+      return;
+    }
+
+    setSavingUid(true);
+    try {
+      await apiFetch<MeResponse>('/api/me', {
+        method: 'PATCH',
+        body: JSON.stringify({ binanceUid: clean }),
+      });
+      if (onRefreshProfile) {
+        await onRefreshProfile();
+      }
+      setEditingUid(false);
+    } catch (saveError) {
+      setUidError(errorMessage(saveError));
+    } finally {
+      setSavingUid(false);
+    }
+  };
 
   const totals = useMemo(() => {
     let deposited = 0;
@@ -136,8 +177,20 @@ export function WalletView({
             </div>
           </div>
           <div className="rounded-lg border border-[#1e2330] bg-[#11141c] p-3">
-            <div className="font-mono text-[9px] uppercase tracking-wide text-slate-500">
-              Binance UID
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[9px] uppercase tracking-wide text-slate-500">
+                Binance UID
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setUidInput(profile.binanceUid ?? '');
+                  setEditingUid(true);
+                }}
+                className="font-mono text-[9px] font-bold text-[#00f090] hover:underline"
+              >
+                {profile.binanceUid ? 'Editar' : 'Afiliar'}
+              </button>
             </div>
             <div className="mt-1 truncate font-mono text-[11px] font-bold text-slate-200">
               {profile.binanceUid ?? 'Sin registrar'}
@@ -233,6 +286,77 @@ export function WalletView({
           )}
         </div>
       </section>
+
+      {/* Modal para afiliar o editar Binance Pay UID */}
+      {editingUid ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+          <div className="w-full max-w-sm rounded-lg border border-[#1e2330] bg-[#11141c] p-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#1a1e28] pb-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-white">
+                Afiliar Binance Pay UID
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingUid(false);
+                  setUidError(null);
+                }}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveUid} className="mt-4 space-y-3">
+              {uidError ? (
+                <div className="rounded border border-[#f43f5e]/30 bg-[#1f1113] px-3 py-2 text-[11px] text-[#fda4af]">
+                  {uidError}
+                </div>
+              ) : null}
+
+              <div>
+                <label htmlFor="uid-input" className="block text-[11px] font-bold text-slate-300">
+                  Tu Binance Pay ID / UID
+                </label>
+                <input
+                  id="uid-input"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={10}
+                  value={uidInput}
+                  onChange={(e) => setUidInput(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="Ej: 198274635"
+                  className="mt-1 w-full rounded border border-[#222736] bg-[#090a0f] px-3 py-2 font-mono text-xs text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none"
+                  autoFocus
+                />
+                <p className="mt-1 text-[10px] text-slate-500">
+                  Número de 8 a 10 dígitos ubicado en tu perfil de la app de Binance.
+                </p>
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingUid(false);
+                    setUidError(null);
+                  }}
+                  className="flex-1 rounded border border-[#2d3447] bg-[#161a24] py-2 text-xs font-bold text-slate-300 hover:bg-[#1e2330]"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingUid}
+                  className="flex-1 rounded bg-[#00f090] py-2 text-xs font-bold text-black hover:bg-[#00d681] disabled:opacity-50"
+                >
+                  {savingUid ? <Spinner className="mx-auto text-black" /> : 'Guardar UID'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

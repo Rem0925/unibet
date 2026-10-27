@@ -57,9 +57,29 @@ export function useSession() {
 
     let active = true;
 
-    void apiFetch<MeResponse>('/api/auth/sync', { method: 'POST' })
+    let bodyPayload: Record<string, string> | undefined = undefined;
+    if (typeof window !== 'undefined') {
+      try {
+        const pending = localStorage.getItem('unibet_pending_registration');
+        if (pending) {
+          bodyPayload = JSON.parse(pending);
+        }
+      } catch {
+        // Ignorar error al parsear storage
+      }
+    }
+
+    void apiFetch<MeResponse>('/api/auth/sync', {
+      method: 'POST',
+      body: bodyPayload ? JSON.stringify(bodyPayload) : undefined,
+    })
       .then((response) => {
-        if (active) setProfile(response.profile);
+        if (active) {
+          setProfile(response.profile);
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('unibet_pending_registration');
+          }
+        }
       })
       .catch((syncError: unknown) => {
         if (!active) return;

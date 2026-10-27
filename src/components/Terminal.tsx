@@ -596,6 +596,7 @@ export function Terminal({
             onRetry={() => void loadTransactions()}
             onDeposit={() => setShowDeposit(true)}
             onWithdraw={() => setShowWithdraw(true)}
+            onRefreshProfile={refreshProfile}
           />
         ) : null}
 

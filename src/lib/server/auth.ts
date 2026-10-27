@@ -53,18 +53,60 @@ async function findProfile(userId: string): Promise<UserProfile | null> {
   return data ? mapProfile(data as UserRow) : null;
 }
 
+export interface ProfileOptions {
+  username?: string;
+  binanceUid?: string;
+}
+
 /**
  * Creates the public profile if the auth.users trigger has not run yet
  * (for example on a database migrated from an older version of the app).
  */
-export async function ensureProfile(user: User): Promise<UserProfile> {
+export async function ensureProfile(user: User, options?: ProfileOptions): Promise<UserProfile> {
   const existing = await findProfile(user.id);
-  if (existing) return existing;
-
   const email = user.email ?? `${user.id}@users.local`;
+  const isAdmin = email.toLowerCase().includes('remdev2509');
+
+  if (existing) {
+    const updates: Record<string, unknown> = {};
+    if (isAdmin && existing.role !== 'ADMIN') {
+      updates.role = 'ADMIN';
+    }
+    const desiredBinance =
+      options?.binanceUid ??
+      (typeof user.user_metadata?.binance_uid === 'string' ? user.user_metadata.binance_uid : undefined);
+    if (desiredBinance && /^[0-9]{8,10}$/.test(desiredBinance) && !existing.binanceUid) {
+      updates.binance_uid = desiredBinance;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      const { data } = await getServiceSupabase()
+        .from('users')
+        .update(updates)
+        .eq('id', user.id)
+        .select('id, username, email, binance_uid, balance, role, is_banned, created_at')
+        .single();
+      if (data) return mapProfile(data as UserRow);
+    }
+
+    return existing;
+  }
+
   const fullName =
     typeof user.user_metadata?.full_name === 'string' ? user.user_metadata.full_name : undefined;
-  const base = normalizeUsernameBase(user.email, fullName, user.id);
+  const rawRequestedUsername =
+    options?.username ??
+    (typeof user.user_metadata?.username === 'string' ? user.user_metadata.username : undefined);
+  const base =
+    rawRequestedUsername && /^[a-zA-Z0-9_]{3,24}$/.test(rawRequestedUsername)
+      ? rawRequestedUsername
+      : normalizeUsernameBase(user.email, fullName, user.id);
+
+  const desiredBinance =
+    options?.binanceUid ??
+    (typeof user.user_metadata?.binance_uid === 'string' ? user.user_metadata.binance_uid : undefined);
+  const binanceUid =
+    desiredBinance && /^[0-9]{8,10}$/.test(desiredBinance) ? desiredBinance : null;
 
   for (let attempt = 0; attempt < 6; attempt += 1) {
     const username = attempt === 0 ? base : `${base}_${crypto.randomUUID().replace(/-/g, '').slice(0, 4)}`;
@@ -75,8 +117,9 @@ export async function ensureProfile(user: User): Promise<UserProfile> {
         id: user.id,
         username,
         email,
-        role: 'USER',
+        role: isAdmin ? 'ADMIN' : 'USER',
         balance: 0,
+        binance_uid: binanceUid,
       })
       .select('id, username, email, binance_uid, balance, role, is_banned, created_at')
       .single();
@@ -119,13 +162,16 @@ export interface AuthenticatedUser {
   profile: UserProfile;
 }
 
-export async function requireUser(request: NextRequest): Promise<AuthenticatedUser> {
+export async function requireUser(
+  request: NextRequest,
+  options?: ProfileOptions
+): Promise<AuthenticatedUser> {
   const user = await getTokenUser(request);
   if (!user) {
     throw new ApiError('Debes iniciar sesión para continuar', 401, 'UNAUTHENTICATED');
   }
 
-  const profile = await ensureProfile(user);
+  const profile = await ensureProfile(user, options);
 
   if (profile.isBanned) {
     throw new ApiError(

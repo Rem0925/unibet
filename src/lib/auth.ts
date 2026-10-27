@@ -31,13 +31,17 @@ export async function signInWithGoogle() {
 /**
  * Iniciar sesión con enlace mágico (Magic Link) al correo.
  */
-export async function signInWithMagicLink(email: string) {
+export async function signInWithMagicLink(
+  email: string,
+  metadata?: { username?: string; binance_uid?: string }
+) {
   requireConfiguration();
   const { data, error } = await supabase.auth.signInWithOtp({
     email: email.trim(),
     options: {
       emailRedirectTo: redirectUrl(),
       shouldCreateUser: true,
+      data: metadata,
     },
   });
 
