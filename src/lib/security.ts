@@ -59,7 +59,6 @@ const MarketOptionSchema = z
   .max(50, { message: 'Cada opción puede tener máximo 50 caracteres' })
   .transform((value) => value.normalize('NFC'));
 
-// Esquema para la creación de un nuevo mercado de apuestas
 export const CreateMarketSchema = z
   .object({
     title: z
@@ -84,7 +83,6 @@ export const CreateMarketSchema = z
   })
   .strict();
 
-// Esquema para meter dinero a una apuesta
 export const PlaceBetSchema = z
   .object({
     marketId: UuidSchema,
@@ -101,7 +99,6 @@ export const PlaceBetSchema = z
   })
   .strict();
 
-// Esquema para solicitud de retiro
 export const WithdrawSchema = z
   .object({
     amount: PositiveMoneySchema.min(WITHDRAW_MIN, {
@@ -118,7 +115,6 @@ export const WithdrawSchema = z
   })
   .strict();
 
-// Esquema para solicitud de orden de depósito
 export const DepositSchema = z
   .object({
     amount: PositiveMoneySchema.min(DEPOSIT_MIN, {
@@ -129,7 +125,6 @@ export const DepositSchema = z
   })
   .strict();
 
-// Esquema para resolución de mercado (Solo Administradores y Moderadores)
 export const ResolveMarketSchema = z
   .object({
     marketId: UuidSchema,
@@ -182,8 +177,6 @@ export const ReconcileWithdrawalSchema = z
   })
   .strict();
 
-// Reconciliación de depósitos: 'verify' consulta a Binance y acredita o
-// descarta; 'fail' marca manualmente la orden como fallida.
 export const ReconcileDepositSchema = z
   .object({
     referenceId: z

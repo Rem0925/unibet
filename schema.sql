@@ -1,26 +1,4 @@
--- ====================================================================
--- UniBet — Esquema blindado para apuestas pari-mutuel (USDT / Binance Pay)
--- Reglas financieras:
---   1. Comisión del 1.5% cobrada al RECARGAR (0% dentro de las apuestas).
---   2. El 100% del pozo se reparte entre los ganadores, con un TOPE DE
---      MULTIPLICADOR de 20x: si el pozo pagaría más de 20x, el excedente
---      va íntegro a la casa (HOUSE_WIN).
---   3. Si gana una opción sin apuestas: 70% Casa + 30% creador.
--- La casa es UNA sola cuenta: la primera ADMIN activa creada
--- (fn_house_admin_id); toda recaudación va ahí, nunca repartida.
--- ====================================================================
--- Ejecutar este archivo completo en el SQL Editor de Supabase. Es
--- idempotente: se puede volver a ejecutar para actualizar funciones,
--- políticas y triggers sin perder datos, y también actualiza de forma
--- segura una base de datos creada con una versión anterior del esquema
--- (sección "MIGRACIÓN SEGURA PARA BASES DE DATOS ANTIGUAS").
--- ====================================================================
-
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- ====================================================================
--- TABLAS
--- ====================================================================
 
 CREATE TABLE IF NOT EXISTS public.users (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -86,10 +64,6 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- ====================================================================
--- ÍNDICES
--- ====================================================================
-
 CREATE INDEX IF NOT EXISTS idx_bets_market_id ON public.bets(market_id);
 CREATE INDEX IF NOT EXISTS idx_bets_user_id ON public.bets(user_id);
 CREATE INDEX IF NOT EXISTS idx_bets_market_option ON public.bets(market_id, selected_option);
@@ -99,17 +73,6 @@ CREATE INDEX IF NOT EXISTS idx_markets_close_time ON public.markets(close_time);
 CREATE INDEX IF NOT EXISTS idx_transactions_user ON public.transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_type_status ON public.transactions(type, status);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON public.audit_logs(created_at DESC);
-
--- ====================================================================
--- MIGRACIÓN SEGURA PARA BASES DE DATOS ANTIGUAS
--- CREATE TABLE IF NOT EXISTS no modifica tablas que ya existen con una
--- versión previa del esquema. Esta sección añade las columnas que falten,
--- reemplaza los CHECK heredados (nombres autogenerados) por las reglas
--- actuales y garantiza la unicidad esencial. Todo es idempotente y no
--- toca datos existentes. Si algún dato legado viola una regla nueva, la
--- migración fallará con un mensaje claro: corrige esas filas y vuelve a
--- ejecutar el script.
--- ====================================================================
 
 ALTER TABLE public.users
     ADD COLUMN IF NOT EXISTS balance NUMERIC(18, 4) NOT NULL DEFAULT 0.0000,
@@ -137,8 +100,6 @@ ALTER TABLE public.transactions
     ADD COLUMN IF NOT EXISTS reference_id TEXT,
     ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
 
--- CHECKs heredados (nombres autogenerados por versiones anteriores) y
--- versiones previas de las restricciones con nombre estable.
 ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_username_check;
 ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_binance_uid_check;
 ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_balance_check;
@@ -171,7 +132,6 @@ ALTER TABLE public.markets ADD CONSTRAINT markets_options_shape CHECK (
 ALTER TABLE public.markets ADD CONSTRAINT markets_status_valid CHECK (status IN ('OPEN', 'CLOSED', 'RESOLVED', 'CANCELLED'));
 ALTER TABLE public.markets ADD CONSTRAINT markets_pool_non_negative CHECK (total_pool >= 0);
 
--- Si resolved_by ya existía sin clave foránea, se añade una vez.
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -207,8 +167,6 @@ ALTER TABLE public.transactions ADD CONSTRAINT transactions_amount_positive CHEC
 ALTER TABLE public.transactions ADD CONSTRAINT transactions_type_valid CHECK (type IN ('DEPOSIT', 'WITHDRAW', 'BET_PLACED', 'BET_WON', 'FEE_DEPOSIT', 'HOUSE_WIN', 'CREATOR_WIN', 'REFUND'));
 ALTER TABLE public.transactions ADD CONSTRAINT transactions_status_valid CHECK (status IN ('PENDING', 'COMPLETED', 'FAILED'));
 
--- Unicidad esencial: si una tabla antigua no tiene índice único en
--- reference_id, la idempotencia de depósitos/retiros no estaría garantizada.
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -248,10 +206,6 @@ BEGIN
     END IF;
 END $$;
 
--- ====================================================================
--- TRIGGERS
--- ====================================================================
-
 CREATE OR REPLACE FUNCTION public.fn_set_updated_at()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -268,7 +222,6 @@ CREATE TRIGGER trg_users_updated_at
 BEFORE UPDATE ON public.users
 FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
 
--- Crea el perfil público automáticamente cuando Supabase registra un usuario.
 CREATE OR REPLACE FUNCTION public.fn_handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -307,21 +260,12 @@ CREATE TRIGGER on_auth_user_created
 AFTER INSERT ON auth.users
 FOR EACH ROW EXECUTE FUNCTION public.fn_handle_new_user();
 
--- ====================================================================
--- ROW LEVEL SECURITY
--- Los route handlers usan service_role y autorizan explícitamente. Estas
--- políticas son una segunda barrera para cualquier acceso directo con la
--- clave anónima.
--- ====================================================================
-
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.markets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
--- Helper SECURITY DEFINER: evita la recursión infinita que produciría
--- consultar public.users desde una política de public.users.
 CREATE OR REPLACE FUNCTION public.fn_current_user_role()
 RETURNS TEXT
 LANGUAGE sql
@@ -377,13 +321,6 @@ CREATE POLICY "transactions_select_admin"
 ON public.transactions FOR SELECT TO authenticated
 USING (public.fn_current_user_role() = 'ADMIN');
 
--- audit_logs no tiene políticas: solo service_role puede leer/escribir.
-
--- ====================================================================
--- VISTA AGREGADA DE POZOS
--- No expone tickets individuales al cliente.
--- ====================================================================
-
 DROP VIEW IF EXISTS public.market_option_pools;
 
 CREATE VIEW public.market_option_pools AS
@@ -397,15 +334,6 @@ SELECT
 FROM public.bets b
 GROUP BY b.market_id, b.selected_option;
 
--- ====================================================================
--- PROCEDIMIENTOS ALMACENADOS
--- ====================================================================
-
--- 0. Cuenta única de la casa: SIEMPRE la primera cuenta ADMIN activa creada.
---    Toda la recaudación de la casa (comisión del 1.5%, excedente del tope
---    de multiplicador, pozo huérfano) va a ESA única cuenta; nunca se
---    reparte entre los demás administradores. La función es interna de las
---    demás RPCs de dinero.
 CREATE OR REPLACE FUNCTION public.fn_house_admin_id()
 RETURNS UUID
 LANGUAGE sql
@@ -419,9 +347,6 @@ AS $$
     LIMIT 1;
 $$;
 
--- 1. Acreditar depósito de Binance Pay (1.5% de comisión de entrada).
---    La transacción PENDING creada por /api/wallet/deposit es la fuente de
---    verdad del usuario y del monto; el webhook no puede inventar una orden.
 DROP FUNCTION IF EXISTS public.fn_credit_deposit(UUID, NUMERIC, TEXT);
 
 CREATE OR REPLACE FUNCTION public.fn_credit_deposit(
@@ -473,22 +398,15 @@ BEGIN
         RAISE EXCEPTION 'La orden de depósito no está pendiente';
     END IF;
 
-    -- Tolerancia de 5 centavos por redondeos del proveedor.
     IF abs(v_tx.amount - p_gross_amount) > 0.05 THEN
         RAISE EXCEPTION 'El monto del webhook no coincide con la orden';
     END IF;
 
-    -- Cuenta única de la casa (la primera ADMIN activa): toda la comisión
-    -- va a esa sola cuenta, nunca repartida entre administradores.
     v_admin_id := public.fn_house_admin_id();
 
     IF v_admin_id IS NULL THEN
-        -- Sin administrador configurado, se acredita el 100% para no perder
-        -- fondos del usuario. El fee se activa al crear el primer admin.
         v_fee_amount := 0;
     ELSE
-        -- 1.5%: cubre costos de operación sin castigar al usuario. Si algún
-        -- día cambia, ajustar también DEPOSIT_FEE_RATE en src/lib/constants.ts.
         v_fee_amount := ROUND(p_gross_amount * 0.015, 4);
     END IF;
 
@@ -542,7 +460,6 @@ BEGIN
 END;
 $$;
 
--- 2. Realizar apuesta atómicamente (0% comisiones dentro del mercado).
 DROP FUNCTION IF EXISTS public.fn_place_bet(UUID, UUID, TEXT, NUMERIC);
 
 CREATE OR REPLACE FUNCTION public.fn_place_bet(
@@ -571,8 +488,6 @@ BEGIN
         RAISE EXCEPTION 'Debes seleccionar una opción';
     END IF;
 
-    -- Bloqueo en el mismo orden que la liquidación (mercado -> usuario)
-    -- para evitar deadlocks.
     SELECT * INTO v_market
     FROM public.markets
     WHERE id = p_market_id
@@ -615,10 +530,6 @@ BEGIN
         RAISE EXCEPTION 'Saldo insuficiente en tu billetera';
     END IF;
 
-    -- Tope por usuario y mercado: evita que una sola cuenta distorsione las
-    -- cuotas con volumen desproporcionado. Las filas del usuario ya están
-    -- bloqueadas (FOR UPDATE), por lo que dos apuestas concurrentes del
-    -- mismo usuario se serializan y la suma es confiable.
     SELECT COALESCE(SUM(amount), 0) INTO v_user_market_total
     FROM public.bets
     WHERE market_id = p_market_id
@@ -661,9 +572,6 @@ BEGIN
 END;
 $$;
 
--- 3. Liquidación de mercado.
---    Caso normal: 100% del pozo a los ganadores.
---    Batacazo huérfano: 70% Casa + 30% creador (100% Casa si creó el admin).
 DROP FUNCTION IF EXISTS public.fn_resolve_market(UUID, TEXT, UUID);
 
 CREATE OR REPLACE FUNCTION public.fn_resolve_market(
@@ -719,8 +627,6 @@ BEGIN
         RAISE EXCEPTION 'La opción ganadora no existe en este mercado';
     END IF;
 
-    -- Cuenta única de la casa (la primera ADMIN activa): pozo huérfano y
-    -- excedente del tope de multiplicador van a esa sola cuenta.
     v_admin_id := public.fn_house_admin_id();
 
     IF v_market.total_pool = 0 THEN
@@ -740,9 +646,6 @@ BEGIN
       AND selected_option = p_winning_option
       AND status = 'ACTIVE';
 
-    -- ================================================================
-    -- NADIE APOSTÓ A LA OPCIÓN GANADORA
-    -- ================================================================
     IF v_winner_count = 0 THEN
         UPDATE public.bets
         SET status = 'LOST'
@@ -807,15 +710,6 @@ BEGIN
         );
     END IF;
 
-    -- ================================================================
-    -- CASO NORMAL: HAY GANADORES
-    -- Multiplicador con TOPE de 20x: si el pozo crudo pagaría más que el
-    -- tope, el excedente va íntegro a la casa (HOUSE_WIN). Sin admin
-    -- activo no hay casa que reciba el excedente, así que se liquida sin
-    -- tope para no perder fondos de los ganadores (misma política que la
-    -- comisión de recarga). El último ganador recibe el remanente exacto
-    -- del pool distribuible, sin polvo por redondeo.
-    -- ================================================================
     IF v_admin_id IS NULL THEN
         v_payout_multiplier := v_market.total_pool / v_total_winning_pool;
     ELSE
@@ -828,8 +722,6 @@ BEGIN
     );
     v_house_surplus := ROUND(v_market.total_pool - v_distributable_pool, 4);
 
-    -- Polvo de redondeo (< 1 centavo) mejor para los ganadores que como
-    -- transacción fantasma para la casa.
     IF v_house_surplus < 0.01 THEN
         v_distributable_pool := v_market.total_pool;
         v_house_surplus := 0;
@@ -887,8 +779,6 @@ BEGIN
         END IF;
     END LOOP;
 
-    -- Excedente del tope de multiplicador: el resto del pozo se lo queda
-    -- la casa (el primer admin activo), tal como el usuario pidió.
     IF v_house_surplus > 0 AND v_admin_id IS NOT NULL THEN
         UPDATE public.users
         SET balance = balance + v_house_surplus,
@@ -930,7 +820,6 @@ BEGIN
 END;
 $$;
 
--- 4. Cerrar mercado (dejar de aceptar apuestas).
 DROP FUNCTION IF EXISTS public.fn_close_market(UUID, UUID);
 
 CREATE OR REPLACE FUNCTION public.fn_close_market(p_market_id UUID, p_caller_id UUID)
@@ -967,7 +856,6 @@ BEGIN
 END;
 $$;
 
--- 5. Cancelar mercado con reembolso del 100%.
 DROP FUNCTION IF EXISTS public.fn_cancel_market(UUID, UUID, TEXT);
 
 CREATE OR REPLACE FUNCTION public.fn_cancel_market(
@@ -1051,7 +939,6 @@ BEGIN
 END;
 $$;
 
--- 6. Iniciar retiro: descuenta el saldo de forma atómica antes de Binance.
 DROP FUNCTION IF EXISTS public.fn_start_withdrawal(UUID, NUMERIC, TEXT, TEXT);
 
 CREATE OR REPLACE FUNCTION public.fn_start_withdrawal(
@@ -1139,7 +1026,6 @@ BEGIN
 END;
 $$;
 
--- 7. Reembolsar un retiro fallido SIN cobrar comisión.
 DROP FUNCTION IF EXISTS public.fn_refund_withdrawal(UUID, NUMERIC, TEXT, TEXT);
 
 CREATE OR REPLACE FUNCTION public.fn_refund_withdrawal(
@@ -1239,7 +1125,6 @@ BEGIN
 END;
 $$;
 
--- 8. Actualización de usuarios por un administrador.
 DROP FUNCTION IF EXISTS public.fn_admin_update_user(UUID, UUID, TEXT, BOOLEAN);
 
 CREATE OR REPLACE FUNCTION public.fn_admin_update_user(
@@ -1317,7 +1202,6 @@ BEGIN
 END;
 $$;
 
--- 9. Métricas financieras del panel de administración.
 DROP FUNCTION IF EXISTS public.fn_admin_overview(UUID);
 
 CREATE OR REPLACE FUNCTION public.fn_admin_overview(p_caller_id UUID)
@@ -1379,8 +1263,6 @@ BEGIN
 END;
 $$;
 
--- 10. Marcar un depósito como fallido durante la reconciliación del panel
---     admin (Binance confirmó que la orden se cerró sin pago).
 DROP FUNCTION IF EXISTS public.fn_fail_deposit(TEXT, TEXT);
 
 CREATE OR REPLACE FUNCTION public.fn_fail_deposit(
@@ -1428,30 +1310,18 @@ BEGIN
 END;
 $$;
 
--- ====================================================================
--- PERMISOS Y PRIVILEGIOS
--- ====================================================================
-
 GRANT USAGE ON SCHEMA public TO postgres, anon, authenticated, service_role;
 
--- Dar acceso completo a service_role (usado por el backend de Next.js)
 GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
 GRANT ALL ON ALL ROUTINES IN SCHEMA public TO service_role;
 
--- Políticas RLS para lectura en clientes autenticados y anónimos
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO authenticated;
 GRANT SELECT ON public.markets TO anon;
 
--- Privilegios por defecto para objetos futuros
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO service_role;
-
--- Las RPC mueven dinero. Por defecto PostgreSQL las expone a PUBLIC,
--- así que se revocan explícitamente para anon/authenticated y solo
--- service_role (usado por los route handlers) puede ejecutarlas.
--- ====================================================================
 
 REVOKE ALL ON FUNCTION public.fn_credit_deposit(UUID, NUMERIC, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_place_bet(UUID, UUID, TEXT, NUMERIC) FROM PUBLIC;
@@ -1488,7 +1358,6 @@ GRANT EXECUTE ON FUNCTION public.fn_admin_update_user(UUID, UUID, TEXT, BOOLEAN)
 GRANT EXECUTE ON FUNCTION public.fn_admin_overview(UUID) TO service_role;
 GRANT EXECUTE ON FUNCTION public.fn_fail_deposit(TEXT, TEXT) TO service_role;
 
--- La función de rol se usa en las políticas RLS de usuarios autenticados.
 REVOKE ALL ON FUNCTION public.fn_current_user_role() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.fn_current_user_role() TO authenticated;
 
@@ -1496,33 +1365,5 @@ REVOKE ALL ON public.market_option_pools FROM PUBLIC;
 REVOKE ALL ON public.market_option_pools FROM anon, authenticated;
 GRANT SELECT ON public.market_option_pools TO service_role;
 
--- El trigger se ejecuta con los privilegios del owner; no necesita grants.
 REVOKE ALL ON FUNCTION public.fn_handle_new_user() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_set_updated_at() FROM PUBLIC;
-
--- ====================================================================
--- NOTAS DE OPERACIÓN
--- ====================================================================
--- 1. Después de ejecutar este script, asigna el primer ADMIN manualmente:
---      UPDATE public.users SET role = 'ADMIN' WHERE email = 'tu-correo@gmail.com';
--- 2. La clave SUPABASE_SERVICE_ROLE_KEY nunca debe llegar al navegador.
--- 3. /api/webhooks/binance valida RSA-SHA256 con el certificado de Binance
---    correspondiente a Binancepay-Certificate-SN y es idempotente.
--- 4. Los retiros que quedan PENDING por errores de red se reconcilian desde
---    el panel admin (reembolsar o marcar completado). Los depósitos cuyo
---    webhook se perdió se consultan contra Binance (order/query) desde el
---    panel admin y se acreditan con fn_credit_deposit o se marcan FAILED
---    con fn_fail_deposit.
--- 5. Tope por usuario/mercado: máximo 150 USDT activos por persona en un
---    mismo mercado (fn_place_bet). Ajusta ese valor si el círculo crece.
--- 6. Tope de multiplicador: 20x máximo al liquidar (fn_resolve_market).
---    El excedente va a la casa como HOUSE_WIN. Para cambiarlo, ajusta el
---    literal 20.0000 en fn_resolve_market y PAYOUT_MULTIPLIER_CAP en
---    src/lib/constants.ts (deben coincidir).
--- 7. Comisión de recarga: 1.5% (fn_credit_deposit). Para cambiarla, ajusta
---    el literal 0.015 y DEPOSIT_FEE_RATE en src/lib/constants.ts.
--- 8. La casa es UNA sola cuenta: la primera ADMIN activa creada
---    (fn_house_admin_id). Toda la recaudación (comisión 1.5%, excedente del
---    tope 20x, pozo huérfano) va a esa única cuenta, nunca repartida entre
---    admins. No anuncies este reparto en la interfaz de usuarios normales.
--- ====================================================================

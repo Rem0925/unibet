@@ -64,9 +64,7 @@ export function useSession() {
         if (pending) {
           bodyPayload = JSON.parse(pending);
         }
-      } catch {
-        // Ignorar error al parsear storage
-      }
+      } catch {}
     }
 
     void apiFetch<MeResponse>('/api/auth/sync', {

@@ -69,9 +69,7 @@ export function WithdrawModal({
       setError(errorMessage(withdrawError));
       try {
         await onRefreshProfile();
-      } catch {
-        // The balance will refresh on the next poll.
-      }
+      } catch {}
     } finally {
       setLoading(false);
     }

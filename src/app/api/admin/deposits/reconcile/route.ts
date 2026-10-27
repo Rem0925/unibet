@@ -17,7 +17,6 @@ interface DepositRow {
   metadata: unknown;
 }
 
-// Estados terminales de una orden de depósito en Binance Pay.
 const FAILED_ORDER_STATES = new Set(['PAY_FAIL', 'PAY_CLOSED', 'PAY_OVER_TIME', 'PAY_TIMEOUT']);
 
 export async function POST(request: NextRequest) {
@@ -49,7 +48,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: 'El depósito ya estaba acreditado.' });
     }
 
-    // Marcado manual: el admin decide cerrar la orden sin acreditar.
     if (action === 'fail') {
       const { error: failError } = await supabase.rpc('fn_fail_deposit', {
         p_reference_id: referenceId,
@@ -73,7 +71,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Verificación contra Binance: fuente de verdad del pago real.
     let order;
     try {
       order = await queryBinanceDepositOrder(referenceId);
@@ -142,7 +139,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // INIT / PROCESSING u otros estados: aún no hay decisión posible.
     await logAudit({
       actorId: profile.id,
       action: 'DEPOSIT_CHECKED_PENDING',

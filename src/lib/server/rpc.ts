@@ -7,11 +7,6 @@ export interface RpcErrorLike {
   hint?: string;
 }
 
-/**
- * PostgreSQL raises inside our stored procedures arrive as PostgREST code
- * P0001. Those messages are written for end users. Any other failure is an
- * internal error and must not be exposed.
- */
 export function throwRpcError(error: RpcErrorLike | null, fallback: string): never {
   console.error('[rpc]', error);
   if (error?.code === 'P0001' && error.message) {

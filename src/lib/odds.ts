@@ -36,8 +36,6 @@ function buildOdds(poolsByOption: Record<string, Decimal>, totalPool: Decimal, o
       continue;
     }
 
-    // El multiplicador mostrado respeta el tope de liquidación: nunca se
-    // promete en pantalla algo que la base de datos no va a pagar.
     const rawMultiplier = totalPool.dividedBy(optionPool);
     const multiplier = rawMultiplier.gt(MULTIPLIER_CAP) ? MULTIPLIER_CAP : rawMultiplier;
 
@@ -55,11 +53,6 @@ function buildOdds(poolsByOption: Record<string, Decimal>, totalPool: Decimal, o
   };
 }
 
-/**
- * Pari-mutuel odds from the aggregate amount held on every option.
- * Keeping this calculation in one place guarantees the UI and the API
- * present exactly the same numbers.
- */
 export function calculatePariMutuelOddsFromPools(
   options: string[],
   optionPools: Record<string, number | string>
@@ -80,10 +73,6 @@ export function calculatePariMutuelOddsFromPools(
   return buildOdds(poolsByOption, totalPool, options);
 }
 
-/**
- * Convenience helper used by tests and by any caller that has raw tickets.
- * The database is still the source of truth for balances and settlement.
- */
 export function calculatePariMutuelOdds(options: string[], bets: BetTicket[]): MarketOdds {
   const pools: Record<string, number> = {};
 
@@ -104,11 +93,6 @@ export interface BetEstimate {
   optionPool: string;
 }
 
-/**
- * Projected pari-mutuel result if the ticket were added right now.
- * The real multiplier can move until the market closes because new money
- * keeps entering the pool.
- */
 export function estimateBetPayout(params: {
   amount: number | string;
   totalPool: number | string;
@@ -131,8 +115,6 @@ export function estimateBetPayout(params: {
   const projectedTotal = totalPool.plus(amount);
   const projectedOption = optionPool.plus(amount);
   let multiplier = projectedOption.isZero() ? new Decimal(1) : projectedTotal.dividedBy(projectedOption);
-  // El tope de multiplicador es la misma regla que aplica fn_resolve_market:
-  // la proyección no puede prometer un pago que la liquidación recortará.
   if (multiplier.gt(MULTIPLIER_CAP)) {
     multiplier = MULTIPLIER_CAP;
   }

@@ -45,9 +45,7 @@ export function DepositModal({
           setPaid(true);
           showToast('Depósito acreditado en tu billetera', 'success');
         }
-      } catch {
-        // Silent polling; the manual button shows errors.
-      }
+      } catch {}
     };
 
     const interval = setInterval(() => {

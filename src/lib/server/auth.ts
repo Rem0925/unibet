@@ -58,10 +58,6 @@ export interface ProfileOptions {
   binanceUid?: string;
 }
 
-/**
- * Creates the public profile if the auth.users trigger has not run yet
- * (for example on a database migrated from an older version of the app).
- */
 export async function ensureProfile(user: User, options?: ProfileOptions): Promise<UserProfile> {
   const existing = await findProfile(user.id);
   const email = user.email ?? `${user.id}@users.local`;

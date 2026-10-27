@@ -15,10 +15,6 @@ export function getSupabaseUrl(): string {
   return requiredEnv('NEXT_PUBLIC_SUPABASE_URL');
 }
 
-/**
- * Service-role client. It bypasses RLS, so it can only be used from route
- * handlers after the caller has been authenticated and authorized.
- */
 export function getServiceSupabase(): SupabaseClient {
   if (serviceClient) return serviceClient;
 
@@ -38,10 +34,6 @@ export function getServiceSupabase(): SupabaseClient {
   return serviceClient;
 }
 
-/**
- * Anonymous client used only to verify bearer tokens. Never use it for
- * money mutations because PostgREST would apply the caller's RLS policies.
- */
 export function getAuthSupabase(): SupabaseClient {
   if (authClient) return authClient;
 

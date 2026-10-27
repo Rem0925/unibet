@@ -7,10 +7,6 @@ export interface AuditEntry {
   metadata?: Record<string, unknown>;
 }
 
-/**
- * Audit records must never block the main financial operation. If the write
- * fails we log it loudly but let the response continue.
- */
 export async function logAudit(entry: AuditEntry): Promise<void> {
   const { error } = await getServiceSupabase()
     .from('audit_logs')

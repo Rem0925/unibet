@@ -24,7 +24,6 @@ export async function POST(request: NextRequest) {
     const requestId = createReference('WDR');
     const supabase = getServiceSupabase();
 
-    // 1. Descuento atómico antes de tocar Binance.
     const { data: withdrawalData, error: dbError } = await supabase.rpc('fn_start_withdrawal', {
       p_user_id: profile.id,
       p_amount: amount,
@@ -39,7 +38,6 @@ export async function POST(request: NextRequest) {
     const withdrawalResult = (withdrawalData ?? {}) as Record<string, unknown>;
     const remainingBalance = String(withdrawalResult.remaining_balance ?? profile.balance);
 
-    // 2. Pago en Binance Pay.
     try {
       const payoutResult = await executeBinancePayout({
         requestId,
@@ -87,8 +85,6 @@ export async function POST(request: NextRequest) {
         payoutError instanceof Error ? payoutError.message : 'Error desconocido al pagar en Binance';
 
       if (!definitive) {
-        // No sabemos si Binance llegó a procesar la orden. Nunca reembolsamos
-        // automáticamente un resultado incierto: quedaría dinero duplicado.
         const { data: txRow } = await supabase
           .from('transactions')
           .select('metadata')
@@ -132,7 +128,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(response, { status: 202 });
       }
 
-      // Error definitivo: Binance rechazó el pago. Reembolsamos sin comisión.
       console.error('[withdraw] Binance rechazó el retiro; reembolsando:', {
         requestId,
         error: payoutError,

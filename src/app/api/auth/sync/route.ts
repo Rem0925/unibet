@@ -2,10 +2,6 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { requireUser } from '@/lib/server/auth';
 import { jsonError } from '@/lib/server/http';
 
-/**
- * Called right after login. It returns the profile and creates it if the
- * auth.users trigger has not run (older database migration).
- */
 export async function POST(request: NextRequest) {
   try {
     let options: { username?: string; binanceUid?: string } | undefined = undefined;
@@ -18,7 +14,7 @@ export async function POST(request: NextRequest) {
         };
       }
     } catch {
-      // Body is optional
+      // Ignored: request body is optional
     }
 
     const { profile } = await requireUser(request, options);

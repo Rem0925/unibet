@@ -26,8 +26,6 @@ function isFrameworkControlFlow(error: unknown): boolean {
 }
 
 export function jsonError(error: unknown): NextResponse {
-  // Next uses thrown errors with a NEXT_* digest to bail out of prerendering.
-  // They are control flow, not application failures: let the framework catch them.
   if (isFrameworkControlFlow(error)) throw error;
 
   if (error instanceof ApiError) {

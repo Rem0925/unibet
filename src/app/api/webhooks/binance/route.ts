@@ -36,7 +36,6 @@ export async function POST(request: NextRequest) {
       return fail(413, 'Payload too large');
     }
 
-    // 1. Cuerpo RAW: la firma se calcula sobre los bytes exactos.
     const rawBody = await request.text();
     if (rawBody.length === 0 || rawBody.length > MAX_BODY_BYTES) {
       return fail(400, 'Invalid body');
@@ -47,7 +46,6 @@ export async function POST(request: NextRequest) {
     const signature = request.headers.get('binancepay-signature') ?? '';
     const certSn = request.headers.get('binancepay-certificate-sn') ?? '';
 
-    // 2. Firma RSA-SHA256 de Binance Pay.
     const isValid = await verifyBinanceWebhookSignature({
       rawBody,
       timestamp,
@@ -157,8 +155,6 @@ export async function POST(request: NextRequest) {
       return ack();
     }
 
-    // 3. Acreditación atómica e idempotente. Verifica usuario y monto contra
-    //    la orden que creó el backend, no contra datos del navegador.
     const { error: rpcError } = await supabase.rpc('fn_credit_deposit', {
       p_user_id: tx.user_id,
       p_gross_amount: totalFee,
@@ -178,8 +174,6 @@ export async function POST(request: NextRequest) {
             error: rpcError.message,
           },
         });
-        // Se confirma a Binance para detener reintentos infinitos; el caso
-        // queda en auditoría para revisión manual.
         return ack();
       }
 

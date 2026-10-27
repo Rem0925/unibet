@@ -175,8 +175,6 @@ export function Terminal({
   }, []);
 
   useEffect(() => {
-    // Deferred one tick so the initial skeletons paint before the requests
-    // start. This also keeps the effect free of synchronous state updates.
     const timer = window.setTimeout(() => {
       void loadMarkets(true);
       void loadBets(true);
@@ -192,9 +190,7 @@ export function Terminal({
       void loadMarkets(true);
       void loadBets(true);
       void loadTransactions(true);
-      void refreshProfile().catch(() => {
-        // The next poll or manual refresh will retry.
-      });
+      void refreshProfile().catch(() => {});
       if (role === 'ADMIN') void loadAdmin(true);
     }, 30_000);
 

@@ -130,9 +130,6 @@ function appUrl(): string {
   return (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
 }
 
-/**
- * 1. Crear Orden de Depósito en Binance Pay.
- */
 export async function createBinanceDepositOrder(params: {
   userId: string;
   amount: number;
@@ -177,10 +174,6 @@ export async function createBinanceDepositOrder(params: {
   };
 }
 
-/**
- * 3. Consultar el estado real de una orden de depósito en Binance Pay.
- * Se usa para reconciliar depósitos cuyo webhook se perdió.
- */
 export interface BinanceDepositQuery {
   status: string | null;
   totalFee: number | null;
@@ -212,9 +205,6 @@ export async function queryBinanceDepositOrder(tradeNo: string): Promise<Binance
   };
 }
 
-/**
- * 4. Ejecutar Retiro Automático al Binance UID del usuario.
- */
 export async function executeBinancePayout(params: {
   requestId: string;
   binanceUid: string;
@@ -357,11 +347,6 @@ async function getVerificationKeys(certSn: string): Promise<string[]> {
   return keys;
 }
 
-/**
- * 3. Verificar la firma RSA-SHA256 del webhook de Binance Pay.
- * La firma se calcula sobre "timestamp\nnonce\nrawBody\n" y se verifica con
- * el certificado público de Binance correspondiente al Certificate-SN.
- */
 export async function verifyBinanceWebhookSignature(params: {
   rawBody: string;
   timestamp: string;
@@ -391,9 +376,7 @@ export async function verifyBinanceWebhookSignature(params: {
       try {
         const valid = crypto.verify('RSA-SHA256', Buffer.from(payload), pem, signatureBuffer);
         if (valid) return true;
-      } catch {
-        // Try the next certificate.
-      }
+      } catch {}
     }
 
     return false;

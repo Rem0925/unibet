@@ -1,13 +1,11 @@
 export const BET_MIN = 0.5;
 export const BET_MAX = 500;
-/** Tope total que un mismo usuario puede tener apostado en un mercado. */
 export const BET_USER_MARKET_MAX = 150;
 export const DEPOSIT_MIN = 1;
 export const DEPOSIT_MAX = 1000;
 export const WITHDRAW_MIN = 1;
 export const WITHDRAW_MAX = 200;
 export const DEPOSIT_FEE_RATE = 0.015;
-/** Tope de multiplicador: el excedente del pozo va íntegro a la casa. */
 export const PAYOUT_MULTIPLIER_CAP = 20;
 export const MIN_OPTIONS = 2;
 export const MAX_OPTIONS = 10;

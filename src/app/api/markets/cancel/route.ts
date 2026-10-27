@@ -31,7 +31,6 @@ export async function POST(request: NextRequest) {
       metadata: { marketId, reason, result: data },
     });
 
-    // Notificar en Telegram (si está configurado)
     const { data: marketData } = await getServiceSupabase()
       .from('markets')
       .select('title')

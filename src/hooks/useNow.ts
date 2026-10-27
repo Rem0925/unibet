@@ -37,10 +37,6 @@ function getServerSnapshot(): number {
   return 0;
 }
 
-/**
- * A shared clock for countdowns and "can bet" checks. Keeping the tick out
- * of render makes components pure while still updating every 15 seconds.
- */
 export function useNow(): number {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }

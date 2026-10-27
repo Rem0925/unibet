@@ -38,7 +38,6 @@ export async function POST(request: NextRequest) {
       throw new Error('No se pudo crear el mercado');
     }
 
-    // Notificar en Telegram en segundo plano (si está configurado)
     notifyNewMarket({
       title,
       creator: profile.username,

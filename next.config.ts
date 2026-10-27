@@ -11,9 +11,7 @@ function supabaseConnectSources(): string {
       const url = new URL(configured);
       sources.add(url.origin);
       sources.add(`wss://${url.host}`);
-    } catch {
-      // Ignore malformed env values at build time; runtime validates them.
-    }
+    } catch {}
   }
 
   return [...sources].join(' ');

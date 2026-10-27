@@ -21,16 +21,13 @@ import { Spinner } from './ui';
 export function AuthScreen({ configured }: { configured: boolean }) {
   const [tab, setTab] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
 
-  // Estado para Iniciar Sesión
   const [loginEmail, setLoginEmail] = useState('');
 
-  // Estado para Crear Cuenta
   const [regEmail, setRegEmail] = useState('');
   const [regUsername, setRegUsername] = useState('');
   const [regBinanceUid, setRegBinanceUid] = useState('');
   const [regRulesAccepted, setRegRulesAccepted] = useState(false);
 
-  // Estados de carga y feedback
   const [googleLoading, setGoogleLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [magicSent, setMagicSent] = useState(false);
@@ -129,7 +126,6 @@ export function AuthScreen({ configured }: { configured: boolean }) {
 
     setLoading(true);
     try {
-      // Guardar localmente para sincronización en caso de redirección en pestaña limpia
       localStorage.setItem(
         'unibet_pending_registration',
         JSON.stringify({
@@ -359,7 +355,6 @@ export function AuthScreen({ configured }: { configured: boolean }) {
                   </button>
                 </form>
               ) : (
-                /* Formulario de CREAR CUENTA */
                 <form onSubmit={handleRegister} className="space-y-3">
                   <div>
                     <label htmlFor="reg-email" className="block text-[11px] font-bold text-slate-300">

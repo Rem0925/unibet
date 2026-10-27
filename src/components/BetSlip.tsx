@@ -39,7 +39,6 @@ export function BetSlip({
     [validAmount, amountNumber, market.totalPool, optionPool]
   );
 
-  // Advertencia: cuota proyectada casi 1.00x (apostar prácticamente sin margen).
   const lowMultiplier = useMemo(() => {
     const parsed = Number.parseFloat(estimate.multiplier);
     return validAmount && estimate.multiplier !== '—' && Number.isFinite(parsed) && parsed < 1.1;

@@ -1,15 +1,9 @@
-/**
- * Módulo de Notificaciones para Telegram Bot (Opcional)
- * Si TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID no están configurados,
- * el módulo se desactiva silenciosamente sin romper ninguna petición.
- */
-
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 export async function sendTelegramMessage(text: string): Promise<boolean> {
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
-    return false; // Modo silencioso si no está configurado
+    return false;
   }
 
   try {

@@ -15,12 +15,6 @@ function cleanup(now: number) {
   }
 }
 
-/**
- * Lightweight per-instance limiter. It is not a replacement for a distributed
- * limiter (Vercel WAF / Upstash), but it stops accidental loops and basic
- * abuse on a single serverless instance. Database-level atomicity is still
- * the last line of defense for money operations.
- */
 export function enforceRateLimit(key: string, limit: number, windowMs: number): void {
   const now = Date.now();
   cleanup(now);
