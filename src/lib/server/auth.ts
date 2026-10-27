@@ -61,7 +61,8 @@ export interface ProfileOptions {
 export async function ensureProfile(user: User, options?: ProfileOptions): Promise<UserProfile> {
   const existing = await findProfile(user.id);
   const email = user.email ?? `${user.id}@users.local`;
-  const isAdmin = email.toLowerCase().includes('remdev2509');
+  const cleanEmail = email.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const isAdmin = cleanEmail.includes('remdev2509');
 
   if (existing) {
     const updates: Record<string, unknown> = {};
