@@ -227,14 +227,15 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $$
+AS 31985
 DECLARE
     v_base TEXT;
     v_username TEXT;
+    v_suffix TEXT;
     v_attempt INTEGER := 0;
 BEGIN
     v_base := lower(regexp_replace(split_part(COALESCE(NEW.email, ''), '@', 1), '[^a-zA-Z0-9_]', '', 'g'));
-    v_base := left(v_base, 24);
+    v_base := left(v_base, 20);
 
     IF char_length(v_base) < 3 THEN
         v_base := 'user_' || substr(replace(NEW.id::text, '-', ''), 1, 8);
@@ -242,18 +243,29 @@ BEGIN
 
     v_username := v_base;
 
-    WHILE EXISTS (SELECT 1 FROM public.users WHERE username = v_username) LOOP
-        v_attempt := v_attempt + 1;
-        v_username := left(v_base, 20) || '_' || v_attempt::text;
+    LOOP
+        BEGIN
+            INSERT INTO public.users (id, username, email)
+            VALUES (NEW.id, v_username, COALESCE(NULLIF(NEW.email, ''), NEW.id::text || '@users.local'))
+            ON CONFLICT (id) DO NOTHING;
+            EXIT;
+        EXCEPTION WHEN unique_violation THEN
+            v_attempt := v_attempt + 1;
+            v_suffix := substr(replace(gen_random_uuid()::text, '-', ''), 1, 4);
+            v_username := left(v_base, 15) || '_' || v_suffix;
+            IF v_attempt > 5 THEN
+                v_username := 'u_' || substr(replace(NEW.id::text, '-', ''), 1, 12);
+                INSERT INTO public.users (id, username, email)
+                VALUES (NEW.id, v_username, COALESCE(NULLIF(NEW.email, ''), NEW.id::text || '@users.local'))
+                ON CONFLICT (id) DO NOTHING;
+                EXIT;
+            END IF;
+        END;
     END LOOP;
-
-    INSERT INTO public.users (id, username, email)
-    VALUES (NEW.id, v_username, COALESCE(NULLIF(NEW.email, ''), NEW.id::text || '@users.local'))
-    ON CONFLICT (id) DO NOTHING;
 
     RETURN NEW;
 END;
-$$;
+31985;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
@@ -272,9 +284,9 @@ LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $$
-    SELECT role FROM public.users WHERE id = auth.uid();
-$$;
+AS 31985
+    SELECT role FROM public.users WHERE id = auth.uid() AND is_banned = FALSE;
+31985;
 
 DROP POLICY IF EXISTS "users_select_own" ON public.users;
 DROP POLICY IF EXISTS "users_select_admin" ON public.users;
@@ -358,9 +370,10 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $$
+AS 31985
 DECLARE
     v_tx RECORD;
+    v_user RECORD;
     v_admin_id UUID;
     v_fee_amount NUMERIC(18, 4) := 0;
     v_net_amount NUMERIC(18, 4);
@@ -371,6 +384,18 @@ BEGIN
 
     IF p_reference_id IS NULL OR char_length(trim(p_reference_id)) < 6 THEN
         RAISE EXCEPTION 'Referencia de depósito inválida';
+    END IF;
+
+    SELECT * INTO v_user
+    FROM public.users
+    WHERE id = p_user_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Usuario no encontrado';
+    END IF;
+
+    IF v_user.is_banned THEN
+        RAISE EXCEPTION 'Cuenta suspendida';
     END IF;
 
     SELECT * INTO v_tx
@@ -407,58 +432,56 @@ BEGIN
     IF v_admin_id IS NULL THEN
         v_fee_amount := 0;
     ELSE
-        v_fee_amount := ROUND(p_gross_amount * 0.015, 4);
+        v_fee_amount := ROUND(p_gross_amount * 0.015, 2);
     END IF;
 
     v_net_amount := p_gross_amount - v_fee_amount;
+
+    UPDATE public.transactions
+    SET status = 'COMPLETED',
+        amount = v_net_amount,
+        metadata = jsonb_build_object(
+            'gross_amount', p_gross_amount,
+            'fee_amount', v_fee_amount,
+            'net_amount', v_net_amount
+        ),
+        updated_at = timezone('utc'::text, now())
+    WHERE id = v_tx.id;
+
+    IF v_fee_amount > 0 AND v_admin_id IS NOT NULL THEN
+        UPDATE public.users
+        SET balance = balance + v_fee_amount,
+            updated_at = timezone('utc'::text, now())
+        WHERE id = v_admin_id;
+
+        INSERT INTO public.transactions (user_id, type, amount, status, metadata)
+        VALUES (
+            v_admin_id,
+            'FEE_DEPOSIT',
+            v_fee_amount,
+            'COMPLETED',
+            jsonb_build_object(
+                'deposit_tx_id', v_tx.id,
+                'source_user_id', p_user_id,
+                'gross_amount', p_gross_amount,
+                'fee_rate', 0.015
+            )
+        );
+    END IF;
 
     UPDATE public.users
     SET balance = balance + v_net_amount,
         updated_at = timezone('utc'::text, now())
     WHERE id = p_user_id;
 
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'Usuario no encontrado';
-    END IF;
-
-    UPDATE public.transactions
-    SET amount = v_net_amount,
-        status = 'COMPLETED',
-        metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object(
-            'gross_deposit', p_gross_amount,
-            'fee_deducted', v_fee_amount,
-            'credited_at', timezone('utc'::text, now())
-        )
-    WHERE id = v_tx.id;
-
-    IF v_fee_amount > 0 AND v_admin_id IS NOT NULL THEN
-        IF NOT EXISTS (
-            SELECT 1 FROM public.transactions WHERE reference_id = 'FEE_' || p_reference_id
-        ) THEN
-            UPDATE public.users
-            SET balance = balance + v_fee_amount,
-                updated_at = timezone('utc'::text, now())
-            WHERE id = v_admin_id;
-
-            INSERT INTO public.transactions (user_id, type, amount, status, reference_id, metadata)
-            VALUES (
-                v_admin_id,
-                'FEE_DEPOSIT',
-                v_fee_amount,
-                'COMPLETED',
-                'FEE_' || p_reference_id,
-                jsonb_build_object('source_user', p_user_id, 'deposit_reference', p_reference_id)
-            );
-        END IF;
-    END IF;
-
     RETURN jsonb_build_object(
         'success', true,
-        'credited_amount', v_net_amount,
-        'fee_amount', v_fee_amount
+        'gross_amount', p_gross_amount,
+        'fee_amount', v_fee_amount,
+        'net_amount', v_net_amount
     );
 END;
-$$;
+31985;
 
 DROP FUNCTION IF EXISTS public.fn_place_bet(UUID, UUID, TEXT, NUMERIC);
 
@@ -583,10 +606,11 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $$
+AS 31985
 DECLARE
     v_market RECORD;
     v_caller_role TEXT;
+    v_caller_banned BOOLEAN;
     v_admin_id UUID;
     v_total_winning_pool NUMERIC(18, 4) := 0;
     v_winner_count INTEGER := 0;
@@ -594,14 +618,16 @@ DECLARE
     v_bet RECORD;
     v_user_payout NUMERIC(18, 4);
     v_remaining_pool NUMERIC(18, 4);
-    v_payout_multiplier NUMERIC(18, 4);
     v_distributable_pool NUMERIC(18, 4);
     v_house_surplus NUMERIC(18, 4) := 0;
     v_creator_cut NUMERIC(18, 4) := 0;
     v_house_cut NUMERIC(18, 4) := 0;
     v_loser_count INTEGER := 0;
 BEGIN
-    SELECT role INTO v_caller_role FROM public.users WHERE id = p_caller_id;
+    SELECT role, is_banned INTO v_caller_role, v_caller_banned FROM public.users WHERE id = p_caller_id;
+    IF v_caller_banned THEN
+        RAISE EXCEPTION 'Cuenta suspendida';
+    END IF;
     IF v_caller_role NOT IN ('ADMIN', 'MODERATOR') THEN
         RAISE EXCEPTION 'Solo administradores o moderadores pueden certificar el ganador';
     END IF;
@@ -613,6 +639,15 @@ BEGIN
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Mercado no encontrado';
+    END IF;
+
+    IF v_caller_role = 'MODERATOR' THEN
+        IF v_market.creator_id = p_caller_id THEN
+            RAISE EXCEPTION 'Un moderador no puede liquidar un mercado creado por él mismo.';
+        END IF;
+        IF EXISTS (SELECT 1 FROM public.bets WHERE market_id = p_market_id AND user_id = p_caller_id AND status = 'ACTIVE') THEN
+            RAISE EXCEPTION 'Conflicto de interés: un moderador con apuestas activas en este mercado no puede liquidarlo.';
+        END IF;
     END IF;
 
     IF v_market.status NOT IN ('OPEN', 'CLOSED') THEN
@@ -657,8 +692,8 @@ BEGIN
             RAISE EXCEPTION 'No hay un administrador activo para recibir el pozo';
         END IF;
 
-        IF v_market.creator_id <> v_admin_id THEN
-            v_creator_cut := ROUND(v_market.total_pool * 0.30, 4);
+        IF v_market.creator_id IS NOT NULL AND v_market.creator_id <> v_admin_id THEN
+            v_creator_cut := ROUND(v_market.total_pool * 0.30, 2);
             v_house_cut := v_market.total_pool - v_creator_cut;
 
             UPDATE public.users
@@ -710,19 +745,10 @@ BEGIN
         );
     END IF;
 
-    IF v_admin_id IS NULL THEN
-        v_payout_multiplier := v_market.total_pool / v_total_winning_pool;
+    IF v_admin_id IS NOT NULL AND v_market.total_pool > (v_total_winning_pool * 20.0000) THEN
+        v_distributable_pool := ROUND(v_total_winning_pool * 20.0000, 2);
+        v_house_surplus := v_market.total_pool - v_distributable_pool;
     ELSE
-        v_payout_multiplier := LEAST(v_market.total_pool / v_total_winning_pool, 20.0000);
-    END IF;
-
-    v_distributable_pool := LEAST(
-        ROUND(v_total_winning_pool * v_payout_multiplier, 4),
-        v_market.total_pool
-    );
-    v_house_surplus := ROUND(v_market.total_pool - v_distributable_pool, 4);
-
-    IF v_house_surplus < 0.01 THEN
         v_distributable_pool := v_market.total_pool;
         v_house_surplus := 0;
     END IF;
@@ -743,7 +769,7 @@ BEGIN
             ELSE
                 v_user_payout := ROUND(
                     (v_bet.amount / v_total_winning_pool) * v_distributable_pool,
-                    4
+                    2
                 );
                 IF v_user_payout > v_remaining_pool THEN
                     v_user_payout := v_remaining_pool;
@@ -780,26 +806,44 @@ BEGIN
     END LOOP;
 
     IF v_house_surplus > 0 AND v_admin_id IS NOT NULL THEN
+        IF v_market.creator_id IS NOT NULL AND v_market.creator_id <> v_admin_id THEN
+            v_creator_cut := ROUND(v_house_surplus * 0.30, 2);
+            v_house_cut := v_house_surplus - v_creator_cut;
+
+            UPDATE public.users
+            SET balance = balance + v_creator_cut,
+                updated_at = timezone('utc'::text, now())
+            WHERE id = v_market.creator_id;
+
+            INSERT INTO public.transactions (user_id, type, amount, status, metadata)
+            VALUES (
+                v_market.creator_id,
+                'CREATOR_WIN',
+                v_creator_cut,
+                'COMPLETED',
+                jsonb_build_object(
+                    'market_id', p_market_id,
+                    'note', '30% del excedente de 20x por ser el creador'
+                )
+            );
+        ELSE
+            v_house_cut := v_house_surplus;
+        END IF;
+
         UPDATE public.users
-        SET balance = balance + v_house_surplus,
+        SET balance = balance + v_house_cut,
             updated_at = timezone('utc'::text, now())
         WHERE id = v_admin_id;
-
-        IF NOT FOUND THEN
-            RAISE EXCEPTION 'Administrador de la casa no encontrado';
-        END IF;
 
         INSERT INTO public.transactions (user_id, type, amount, status, metadata)
         VALUES (
             v_admin_id,
             'HOUSE_WIN',
-            v_house_surplus,
+            v_house_cut,
             'COMPLETED',
             jsonb_build_object(
                 'market_id', p_market_id,
-                'note', 'Excedente del tope de multiplicador (20x)',
-                'winning_pool', v_total_winning_pool,
-                'raw_multiplier', ROUND(v_market.total_pool / v_total_winning_pool, 4)
+                'note', 'Excedente del tope de multiplicador (20x)'
             )
         );
     END IF;
@@ -812,13 +856,16 @@ BEGIN
 
     RETURN jsonb_build_object(
         'success', true,
-        'case', 'WINNERS_PAID',
-        'winning_bets', v_winner_count,
-        'distributed', v_distributable_pool,
-        'house_surplus', v_house_surplus
+        'case', 'RESOLVED_WITH_WINNERS',
+        'winning_pool', v_total_winning_pool,
+        'distributable_pool', v_distributable_pool,
+        'house_surplus', v_house_surplus,
+        'creator_cut', v_creator_cut,
+        'house_cut', v_house_cut,
+        'winners', v_winner_count
     );
 END;
-$$;
+31985;
 
 DROP FUNCTION IF EXISTS public.fn_close_market(UUID, UUID);
 
@@ -827,12 +874,16 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $$
+AS 31985
 DECLARE
     v_role TEXT;
+    v_banned BOOLEAN;
     v_status TEXT;
 BEGIN
-    SELECT role INTO v_role FROM public.users WHERE id = p_caller_id;
+    SELECT role, is_banned INTO v_role, v_banned FROM public.users WHERE id = p_caller_id;
+    IF v_banned THEN
+        RAISE EXCEPTION 'Cuenta suspendida';
+    END IF;
     IF v_role NOT IN ('ADMIN', 'MODERATOR') THEN
         RAISE EXCEPTION 'No autorizado';
     END IF;
@@ -854,7 +905,7 @@ BEGIN
 
     RETURN jsonb_build_object('success', true, 'status', 'CLOSED');
 END;
-$$;
+31985;
 
 DROP FUNCTION IF EXISTS public.fn_cancel_market(UUID, UUID, TEXT);
 
@@ -867,15 +918,19 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $$
+AS 31985
 DECLARE
     v_role TEXT;
+    v_banned BOOLEAN;
     v_market RECORD;
     v_bet RECORD;
     v_refunded_total NUMERIC(18, 4) := 0;
     v_refunded_count INTEGER := 0;
 BEGIN
-    SELECT role INTO v_role FROM public.users WHERE id = p_caller_id;
+    SELECT role, is_banned INTO v_role, v_banned FROM public.users WHERE id = p_caller_id;
+    IF v_banned THEN
+        RAISE EXCEPTION 'Cuenta suspendida';
+    END IF;
     IF v_role NOT IN ('ADMIN', 'MODERATOR') THEN
         RAISE EXCEPTION 'No autorizado';
     END IF;
@@ -891,6 +946,15 @@ BEGIN
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Mercado no encontrado';
+    END IF;
+
+    IF v_role = 'MODERATOR' THEN
+        IF v_market.creator_id = p_caller_id THEN
+            RAISE EXCEPTION 'Un moderador no puede cancelar un mercado creado por él mismo.';
+        END IF;
+        IF EXISTS (SELECT 1 FROM public.bets WHERE market_id = p_market_id AND user_id = p_caller_id AND status = 'ACTIVE') THEN
+            RAISE EXCEPTION 'Conflicto de interés: un moderador con apuestas activas en este mercado no puede cancelarlo.';
+        END IF;
     END IF;
 
     IF v_market.status NOT IN ('OPEN', 'CLOSED') THEN
@@ -937,7 +1001,7 @@ BEGIN
         'refunded_bets', v_refunded_count
     );
 END;
-$$;
+31985;
 
 DROP FUNCTION IF EXISTS public.fn_start_withdrawal(UUID, NUMERIC, TEXT, TEXT);
 
@@ -951,7 +1015,7 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $$
+AS 31985
 DECLARE
     v_user RECORD;
     v_existing RECORD;
@@ -996,6 +1060,10 @@ BEGIN
         RAISE EXCEPTION 'Usuario no encontrado';
     END IF;
 
+    IF v_user.is_banned THEN
+        RAISE EXCEPTION 'Tu cuenta está suspendida. No puedes realizar retiros.';
+    END IF;
+
     IF v_user.balance < p_amount THEN
         RAISE EXCEPTION 'Saldo insuficiente';
     END IF;
@@ -1006,6 +1074,8 @@ BEGIN
         updated_at = timezone('utc'::text, now())
     WHERE id = p_user_id;
 
+    SELECT balance INTO v_new_balance FROM public.users WHERE id = p_user_id;
+
     INSERT INTO public.transactions (user_id, type, amount, status, reference_id, metadata)
     VALUES (
         p_user_id,
@@ -1013,18 +1083,19 @@ BEGIN
         p_amount,
         'PENDING',
         p_request_id,
-        jsonb_build_object('target_uid', p_binance_uid, 'requested_at', timezone('utc'::text, now()))
+        jsonb_build_object(
+            'binance_uid', p_binance_uid,
+            'request_id', p_request_id,
+            'disbursed_at', null
+        )
     );
-
-    SELECT balance INTO v_new_balance FROM public.users WHERE id = p_user_id;
 
     RETURN jsonb_build_object(
         'success', true,
-        'already_processed', false,
         'remaining_balance', v_new_balance
     );
 END;
-$$;
+31985;
 
 DROP FUNCTION IF EXISTS public.fn_refund_withdrawal(UUID, NUMERIC, TEXT, TEXT);
 
@@ -1137,18 +1208,24 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $$
+AS 31985
 DECLARE
     v_admin_role TEXT;
+    v_admin_banned BOOLEAN;
     v_target RECORD;
     v_new_role TEXT;
     v_new_banned BOOLEAN;
     v_active_admins INTEGER;
 BEGIN
-    SELECT role INTO v_admin_role FROM public.users WHERE id = p_admin_id;
+    SELECT role, is_banned INTO v_admin_role, v_admin_banned FROM public.users WHERE id = p_admin_id;
+    IF v_admin_banned THEN
+        RAISE EXCEPTION 'Cuenta suspendida';
+    END IF;
     IF v_admin_role IS DISTINCT FROM 'ADMIN' THEN
         RAISE EXCEPTION 'No autorizado';
     END IF;
+
+    PERFORM 1 FROM public.users WHERE role = 'ADMIN' FOR UPDATE;
 
     SELECT * INTO v_target
     FROM public.users
@@ -1200,7 +1277,7 @@ BEGIN
         )
     );
 END;
-$$;
+31985;
 
 DROP FUNCTION IF EXISTS public.fn_admin_overview(UUID);
 
@@ -1209,15 +1286,19 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS $$
+AS 31985
 DECLARE
     v_role TEXT;
+    v_banned BOOLEAN;
     v_total_user_balances NUMERIC(18, 4);
     v_active_pools NUMERIC(18, 4);
     v_pending_withdrawals NUMERIC(18, 4);
     v_stats JSONB;
 BEGIN
-    SELECT role INTO v_role FROM public.users WHERE id = p_caller_id;
+    SELECT role, is_banned INTO v_role, v_banned FROM public.users WHERE id = p_caller_id;
+    IF v_banned THEN
+        RAISE EXCEPTION 'Cuenta suspendida';
+    END IF;
     IF v_role IS DISTINCT FROM 'ADMIN' THEN
         RAISE EXCEPTION 'No autorizado';
     END IF;
@@ -1261,7 +1342,7 @@ BEGIN
 
     RETURN v_stats;
 END;
-$$;
+31985;
 
 DROP FUNCTION IF EXISTS public.fn_fail_deposit(TEXT, TEXT);
 

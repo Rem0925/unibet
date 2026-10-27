@@ -292,6 +292,13 @@ export function Terminal({
     setBetSlip({ market, option });
   };
 
+  const userActiveInMarket = useMemo(() => {
+    if (!betSlip) return 0;
+    return bets
+      .filter((b) => b.marketId === betSlip.market.id && b.status === 'ACTIVE')
+      .reduce((sum, b) => sum + (Number.parseFloat(b.amount) || 0), 0);
+  }, [bets, betSlip]);
+
   const filteredMarkets = useMemo(() => {
     const query = search.trim().toLocaleLowerCase('es');
 
@@ -663,6 +670,7 @@ export function Terminal({
           option={betSlip.option}
           balance={Number.parseFloat(profile.balance) || 0}
           placing={placing}
+          userActiveInMarket={userActiveInMarket}
           onClose={() => setBetSlip(null)}
           onConfirm={(amount) => void handlePlaceBet(amount)}
         />

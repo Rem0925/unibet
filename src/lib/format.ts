@@ -10,12 +10,16 @@ const compactUsdtFormatter = new Intl.NumberFormat('en-US', {
 
 export function formatUsdt(value: number | string | null | undefined): string {
   const number = typeof value === 'number' ? value : Number.parseFloat(value ?? '0');
-  return usdtFormatter.format(Number.isFinite(number) ? number : 0);
+  if (!Number.isFinite(number)) return '0.00';
+  const floored = Math.floor(number * 100) / 100;
+  return usdtFormatter.format(floored);
 }
 
 export function formatUsdtCompact(value: number | string | null | undefined): string {
   const number = typeof value === 'number' ? value : Number.parseFloat(value ?? '0');
-  return compactUsdtFormatter.format(Number.isFinite(number) ? number : 0);
+  if (!Number.isFinite(number)) return '0';
+  const floored = Math.floor(number * 100) / 100;
+  return compactUsdtFormatter.format(floored);
 }
 
 export function formatDate(value: string | null | undefined): string {

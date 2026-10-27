@@ -311,9 +311,9 @@ function extractCertificates(data: unknown): CertificateEntry[] {
   return entries;
 }
 
-async function getCertificates(): Promise<CertificateEntry[]> {
+async function getCertificates(forceRefresh = false): Promise<CertificateEntry[]> {
   const now = Date.now();
-  if (certificateCache && now - certificateCache.fetchedAt < CERT_CACHE_TTL_MS) {
+  if (!forceRefresh && certificateCache && now - certificateCache.fetchedAt < CERT_CACHE_TTL_MS) {
     return certificateCache.entries;
   }
 
@@ -324,26 +324,33 @@ async function getCertificates(): Promise<CertificateEntry[]> {
 }
 
 async function getVerificationKeys(certSn: string): Promise<string[]> {
+  const cleanSn = certSn?.trim();
+  if (!cleanSn) return [];
+
   const keys: string[] = [];
   const staticKey = process.env.BINANCE_PAY_PUBLIC_KEY?.trim();
   const staticSerial = process.env.BINANCE_PAY_CERT_SN?.trim();
 
-  if (staticKey && (!staticSerial || !certSn || staticSerial === certSn)) {
+  if (staticKey && staticSerial && staticSerial === cleanSn) {
     keys.push(normalizePem(staticKey));
   }
 
   try {
-    const certificates = await getCertificates();
-    const matching = certSn ? certificates.filter((entry) => entry.serial === certSn) : [];
-    const candidates = matching.length > 0 ? matching : certificates;
-    for (const entry of candidates) {
+    let certificates = await getCertificates();
+    let matching = certificates.filter((entry) => entry.serial === cleanSn);
+
+    if (matching.length === 0) {
+      certificates = await getCertificates(true);
+      matching = certificates.filter((entry) => entry.serial === cleanSn);
+    }
+
+    for (const entry of matching) {
       if (!keys.includes(entry.pem)) keys.push(entry.pem);
     }
   } catch (error) {
     console.error('[binance] No se pudieron obtener los certificados de Binance:', error);
   }
 
-  if (staticKey && keys.length === 0) keys.push(normalizePem(staticKey));
   return keys;
 }
 
@@ -357,10 +364,16 @@ export async function verifyBinanceWebhookSignature(params: {
   try {
     const { rawBody, timestamp, nonce, signature, certSn } = params;
 
-    if (!rawBody || !timestamp || !nonce || !signature) return false;
+    if (!rawBody || !timestamp || !nonce || !signature || !certSn) return false;
 
     const timestampNumber = Number(timestamp);
     if (!Number.isFinite(timestampNumber) || timestampNumber <= 0) return false;
+
+    const ageMs = Math.abs(Date.now() - timestampNumber);
+    if (ageMs > 5 * 60 * 1000) {
+      console.error('[binance] Webhook descartado: timestamp fuera de la ventana de 5 minutos (replay attack).', ageMs);
+      return false;
+    }
 
     const payload = `${timestamp}\n${nonce}\n${rawBody}\n`;
     const signatureBuffer = Buffer.from(signature, 'base64');
@@ -368,7 +381,7 @@ export async function verifyBinanceWebhookSignature(params: {
 
     const keys = await getVerificationKeys(certSn);
     if (keys.length === 0) {
-      console.error('[binance] Webhook recibido sin clave pública configurada ni certificados disponibles.');
+      console.error('[binance] Webhook recibido sin clave pública configurada ni certificados disponibles para SN:', certSn);
       return false;
     }
 

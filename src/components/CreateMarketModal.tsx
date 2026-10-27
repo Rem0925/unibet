@@ -169,7 +169,7 @@ export function CreateMarketModal({
               className="mb-1 flex items-center justify-between text-[11px] font-bold text-slate-300"
             >
               <span className="flex items-center gap-1">
-                <CalendarClock className="h-3 w-3" /> Cierre de apuestas
+                <CalendarClock className="h-3 w-3" /> Inicio del evento (Cierre de apuestas)
               </span>
               <span className="font-normal text-[10px] text-slate-500">Hora local (UTC-4)</span>
             </label>
@@ -180,6 +180,9 @@ export function CreateMarketModal({
               onChange={(event) => setCloseTime(event.target.value)}
               className="w-full rounded border border-[#222736] bg-[#090a0f] px-3 py-2 text-sm text-white focus:border-[#00f090] focus:outline-none"
             />
+            <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+              Las apuestas cierran al comenzar el evento para evitar ventajas por juego en curso (anti court-siding).
+            </p>
           </div>
         </div>
 

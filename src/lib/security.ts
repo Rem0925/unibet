@@ -90,7 +90,8 @@ export const PlaceBetSchema = z
       .string()
       .trim()
       .min(1, { message: 'Selecciona una opción' })
-      .max(50, { message: 'Opción inválida' }),
+      .max(50, { message: 'Opción inválida' })
+      .transform((value) => value.normalize('NFC')),
     amount: PositiveMoneySchema.min(BET_MIN, {
       message: `Monto mínimo de apuesta: ${BET_MIN.toFixed(2)} USDT`,
     }).max(BET_MAX, {

@@ -13,6 +13,7 @@ export function BetSlip({
   option,
   balance,
   placing,
+  userActiveInMarket = 0,
   onClose,
   onConfirm,
 }: {
@@ -20,14 +21,17 @@ export function BetSlip({
   option: string;
   balance: number;
   placing: boolean;
+  userActiveInMarket?: number;
   onClose: () => void;
   onConfirm: (amount: number) => void;
 }) {
   const [amount, setAmount] = useState('5.00');
 
   const optionPool = Number.parseFloat(market.optionPools[option] ?? '0') || 0;
+  const currentMultiplier = market.odds.optionsOdds[option]?.multiplier ?? '—';
   const amountNumber = Number.parseFloat(amount);
   const validAmount = Number.isFinite(amountNumber) && amountNumber > 0;
+  const remainingMarketCap = Math.max(0, BET_USER_MARKET_MAX - userActiveInMarket);
 
   const estimate = useMemo(
     () =>
@@ -48,13 +52,22 @@ export function BetSlip({
     if (!validAmount) return 'Introduce un monto válido.';
     if (amountNumber < BET_MIN) return `El mínimo por apuesta es $${formatUsdt(BET_MIN)} USDT.`;
     if (amountNumber > BET_MAX) return `El máximo por apuesta es $${formatUsdt(BET_MAX)} USDT.`;
+    if (amountNumber > remainingMarketCap) {
+      return `Superas el límite de $${BET_USER_MARKET_MAX} USDT en este mercado (cupo restante: $${formatUsdt(remainingMarketCap)} USDT).`;
+    }
     if (amountNumber > balance) return 'Saldo insuficiente en tu billetera.';
     return null;
-  }, [amountNumber, balance, validAmount]);
+  }, [amountNumber, balance, remainingMarketCap, validAmount]);
 
   const addAmount = (increment: number) => {
-    const next = Math.min(BET_MAX, (validAmount ? amountNumber : 0) + increment);
-    setAmount(next.toFixed(2));
+    const current = validAmount ? amountNumber : 0;
+    const next = Math.min(BET_MAX, remainingMarketCap, current + increment);
+    setAmount(Math.max(0, next).toFixed(2));
+  };
+
+  const handleMax = () => {
+    const maxVal = Math.max(0, Math.min(balance, BET_MAX, remainingMarketCap));
+    setAmount(maxVal.toFixed(2));
   };
 
   return (
@@ -76,20 +89,27 @@ export function BetSlip({
       <div className="mb-1 truncate text-[11px] text-slate-400">{market.title}</div>
       <div className="mb-3 flex items-center justify-between rounded border border-[#222736] bg-[#161a24] p-2">
         <span className="min-w-0 truncate font-bold text-white">{option}</span>
-        <span className="shrink-0 font-bold text-[#00f090]">{estimate.multiplier}</span>
+        <div className="flex items-center gap-1.5 font-bold">
+          <span className="text-[10px] text-slate-400" title="Cuota antes de tu apuesta">{currentMultiplier}</span>
+          <span className="text-[10px] text-slate-600">→</span>
+          <span className="text-[#00f090]" title="Cuota proyectada tras tu apuesta">{estimate.multiplier}</span>
+        </div>
       </div>
 
       <div className="mb-3 space-y-2">
-        <label htmlFor="bet-amount" className="block text-[10px] font-bold uppercase text-slate-400">
-          Monto (USDT)
-        </label>
+        <div className="flex items-center justify-between text-[10px] font-bold uppercase text-slate-400">
+          <label htmlFor="bet-amount">Monto (USDT)</label>
+          <span className="text-[9px] text-slate-500">
+            Cupo: ${formatUsdt(remainingMarketCap)} USDT
+          </span>
+        </div>
         <div className="relative">
           <input
             id="bet-amount"
             type="number"
             inputMode="decimal"
             min={BET_MIN}
-            max={BET_MAX}
+            max={Math.min(BET_MAX, remainingMarketCap)}
             step="0.5"
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
@@ -111,7 +131,7 @@ export function BetSlip({
           ))}
           <button
             type="button"
-            onClick={() => setAmount(Math.min(balance, BET_MAX).toFixed(2))}
+            onClick={handleMax}
             className="rounded border border-[#252b3d] bg-[#171a24] py-1 text-[10px] font-bold text-slate-300 transition hover:bg-[#1e2330]"
           >
             MAX
@@ -129,7 +149,11 @@ export function BetSlip({
           <span>+${estimate.profit} USDT</span>
         </div>
         <div className="flex justify-between text-[10px] text-slate-500">
-          <span>Pozo después de tu apuesta:</span>
+          <span>Impacto en cuota:</span>
+          <span className="text-slate-300">{currentMultiplier} → {estimate.multiplier}</span>
+        </div>
+        <div className="flex justify-between text-[10px] text-slate-500">
+          <span>Pozo tras tu apuesta:</span>
           <span>${formatUsdt(estimate.totalPool)} USDT</span>
         </div>
       </div>
@@ -151,7 +175,7 @@ export function BetSlip({
           <div className="mb-2 flex items-start gap-1.5 rounded border border-[#1d222e] bg-[#0c0e14] px-2 py-1.5 text-[10px] leading-relaxed text-slate-500">
             <Info className="mt-0.5 h-3 w-3 shrink-0 text-[#00f090]" />
             Cuota estimada: se recalcula con el pozo hasta el cierre (tope de {PAYOUT_MULTIPLIER_CAP}x).
-            Máximo $${BET_USER_MARKET_MAX} USDT activos por persona en este mercado.
+            Máximo ${BET_USER_MARKET_MAX} USDT activos por persona en este mercado.
           </div>
         </>
       )}
