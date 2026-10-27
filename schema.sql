@@ -1429,7 +1429,25 @@ END;
 $$;
 
 -- ====================================================================
--- PERMISOS
+-- PERMISOS Y PRIVILEGIOS
+-- ====================================================================
+
+GRANT USAGE ON SCHEMA public TO postgres, anon, authenticated, service_role;
+
+-- Dar acceso completo a service_role (usado por el backend de Next.js)
+GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO service_role;
+
+-- Políticas RLS para lectura en clientes autenticados y anónimos
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO authenticated;
+GRANT SELECT ON public.markets TO anon;
+
+-- Privilegios por defecto para objetos futuros
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO service_role;
+
 -- Las RPC mueven dinero. Por defecto PostgreSQL las expone a PUBLIC,
 -- así que se revocan explícitamente para anon/authenticated y solo
 -- service_role (usado por los route handlers) puede ejecutarlas.
