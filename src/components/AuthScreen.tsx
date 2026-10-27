@@ -121,9 +121,8 @@ export function AuthScreen({ configured }: { configured: boolean }) {
           </div>
 
           <div className="mt-8 rounded border border-[#f59e0b]/25 bg-[#181511] p-3 font-mono text-[10px] leading-relaxed text-[#fbbf24]">
-            Regla del batacazo: si gana una opción sin apuestas, el pozo se reparte 70% para la
-            casa y 30% para el creador del mercado. Apuesta con responsabilidad: el saldo es
-            dinero real.
+            Regla del batacazo: si gana una opción que nadie apostó, el creador del mercado
+            recibe una parte del pozo. Apuesta con responsabilidad: el saldo es dinero real.
           </div>
         </section>
 

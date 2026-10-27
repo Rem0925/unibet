@@ -13,7 +13,7 @@ Aplicación web de apuestas sociales para un círculo cerrado: los usuarios crea
 | Pari-mutuel | Multiplicador = pozo total / pozo de la opción. La casa no paga de su bolsillo. |
 | Tope de cuota | Multiplicador máximo de **20x**: si el pozo crudo pagaría más, el excedente va íntegro a la casa (`HOUSE_WIN`). |
 | Comisión única | **1.5% solo al recargar** (credita al admin activo como `FEE_DEPOSIT`). 0% en apuestas y retiros. |
-| Batacazo huérfano | Si gana una opción sin apuestas: **70% casa / 30% creador** del mercado. |
+| Batacazo huérfano | Si gana una opción sin apuestas: **70% casa / 30% creador** del mercado. La casa es **una sola cuenta**: la primera ADMIN creada; toda la recaudación (comisión, excedente del tope 20x, pozo huérfano) va ahí y nunca se reparte entre admins. La UI de usuarios normales no muestra lo que la casa retiene. |
 | Límites | Apuesta 0.50–500 · **Tope de 150 USDT activos por persona y mercado** · Depósito 1–1000 · Retiro 1–200 USDT · 2–10 opciones · máx. 365 días. |
 | Reconciliación | Retiros inciertos y depósitos con webhook perdido se revisan en el panel admin: verificación contra Binance (`order/query`), acreditación idempotente o cierre sin pagar. |
 | Roles | `ADMIN` (finanzas + todo), `MODERATOR` (cierra/liquida/cancela, **sin acceso a finanzas**), `USER`. |

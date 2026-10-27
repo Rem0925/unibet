@@ -151,7 +151,7 @@ export function BetSlip({
           ) : null}
           <div className="mb-2 flex items-start gap-1.5 rounded border border-[#1d222e] bg-[#0c0e14] px-2 py-1.5 text-[10px] leading-relaxed text-slate-500">
             <Info className="mt-0.5 h-3 w-3 shrink-0 text-[#00f090]" />
-            Cuota estimada con tope de {PAYOUT_MULTIPLIER_CAP}x (el excedente va a la casa).
+            Cuota estimada: se recalcula con el pozo hasta el cierre (tope de {PAYOUT_MULTIPLIER_CAP}x).
             Máximo $${BET_USER_MARKET_MAX} USDT activos por persona en este mercado.
           </div>
         </>

@@ -165,7 +165,7 @@ export function DepositModal({
               <span className="text-white">${formatUsdt(gross)} USDT</span>
             </div>
             <div className="flex justify-between text-slate-500">
-              <span>Comisión casa ({feePercent}%):</span>
+              <span>Comisión de recarga ({feePercent}%):</span>
               <span>-${formatUsdt(fee)} USDT</span>
             </div>
             <div className="flex justify-between border-t border-[#1e2330] pt-1 font-bold text-white">
@@ -245,7 +245,7 @@ export function DepositModal({
               <span className="text-white">${formatUsdt(gross)} USDT</span>
             </div>
             <div className="flex justify-between text-slate-500">
-              <span>Comisión casa ({feePercent}%):</span>
+              <span>Comisión de recarga ({feePercent}%):</span>
               <span>-${formatUsdt(fee)} USDT</span>
             </div>
             <div className="flex justify-between border-t border-[#1e2330] pt-1 font-bold text-white">

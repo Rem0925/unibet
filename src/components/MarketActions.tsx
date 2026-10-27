@@ -30,8 +30,6 @@ export function ResolveMarketModal({
   const pool = Number.parseFloat(market.totalPool) || 0;
   const winnerPool = Number.parseFloat(market.optionPools[winningOption] ?? '0') || 0;
   const hasWinners = winnerPool > 0;
-  const creatorCut = pool * 0.3;
-  const houseCut = pool - creatorCut;
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -128,13 +126,8 @@ export function ResolveMarketModal({
                 <div className="mb-1 flex items-center gap-1 font-bold text-[#fbbf24]">
                   <AlertTriangle className="h-3 w-3" /> Nadie apostó a esta opción
                 </div>
-                <div className="flex justify-between text-slate-400">
-                  <span>Casa (70%):</span>
-                  <span>${formatUsdt(houseCut)} USDT</span>
-                </div>
-                <div className="flex justify-between text-slate-400">
-                  <span>Creador (30%):</span>
-                  <span>${formatUsdt(creatorCut)} USDT</span>
+                <div className="text-[10px] leading-relaxed text-slate-500">
+                  No habrá pagos a ganadores; el pozo se liquida según la regla del pozo huérfano.
                 </div>
               </>
             )}
@@ -157,8 +150,7 @@ export function ResolveMarketModal({
         </button>
 
         <p className="text-[9px] leading-relaxed text-slate-600">
-          Si ningún ticket acertó, se aplica la regla 70% casa / 30% creador. No se puede
-          deshacer.
+          Si ningún ticket acertó, se aplica la regla del pozo huérfano. No se puede deshacer.
         </p>
       </form>
     </Modal>

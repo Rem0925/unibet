@@ -38,8 +38,13 @@ El sistema **NO** es una casa de apuestas con cuotas fijas. Es **Pari-Mutuel (po
 ### C. Regla del batacazo huérfano
 Si gana una opción con **$0 apostado**:
 1. Todos los tickets activos pasan a `LOST`.
-2. El pozo se reparte: **70% Casa (primer admin activo, transacción `HOUSE_WIN`)** + **30% creador del mercado (`CREATOR_WIN`)**. Si el creador es el propio admin, la casa se queda el 100%.
+2. El pozo se reparte: **70% Casa + 30% creador del mercado (`CREATOR_WIN`)**. Si el creador es la propia casa, la casa se queda el 100%.
 3. Exige al menos un admin activo; si no lo hay, la liquidación falla (transacción abortada, nada cambia).
+
+### C2. La casa es UNA sola cuenta
+* La casa es siempre **la primera cuenta ADMIN activa creada** (`fn_house_admin_id()` en `schema.sql`, centralizada en una única función).
+* **Toda la recaudación va a esa única cuenta** — comisión 1.5% (`FEE_DEPOSIT`), excedente del tope 20x y pozo huérfano (`HOUSE_WIN`) — **nunca se reparte entre los demás admins**.
+* **La interfaz de usuarios normales nunca muestra lo que la casa retiene:** solo se muestra la ganancia del usuario. La regla huérfana se comunica de forma neutra ("el creador recibe una parte del pozo"). Las métricas de la casa (comisiones, ganancias casa, excedentes) viven exclusivamente en el panel ADMIN.
 
 ### D. Límites operativos (`src/lib/constants.ts`)
 * Apuesta: **0.50 – 500.00 USDT** · Depósito: **1 – 1000 USDT** · Retiro: **1 – 200 USDT**.
@@ -103,7 +108,7 @@ Si gana una opción con **$0 apostado**:
 
 ### Principios de seguridad para dinero real
 
-1. **El cliente nunca mueve dinero.** Solo envía intenciones validadas con Zod (`src/lib/security.ts`). Toda mutación de saldo vive en RPCs `SECURITY DEFINER` de `schema.sql` (`fn_place_bet`, `fn_resolve_market`, `fn_cancel_market`, `fn_credit_deposit`, `fn_fail_deposit`, `fn_start_withdrawal`, `fn_refund_withdrawal`, `fn_admin_update_user`), con `REVOKE` a `PUBLIC/anon/authenticated` y `GRANT EXECUTE` únicamente a `service_role`.
+1. **El cliente nunca mueve dinero.** Solo envía intenciones validadas con Zod (`src/lib/security.ts`). Toda mutación de saldo vive en RPCs `SECURITY DEFINER` de `schema.sql` (`fn_house_admin_id`, `fn_place_bet`, `fn_resolve_market`, `fn_cancel_market`, `fn_credit_deposit`, `fn_fail_deposit`, `fn_start_withdrawal`, `fn_refund_withdrawal`, `fn_admin_update_user`), con `REVOKE` a `PUBLIC/anon/authenticated` y `GRANT EXECUTE` únicamente a `service_role`.
 2. **Autenticación sin middleware:** los route handlers validan el `Authorization: Bearer <access_token>` con `supabase.auth.getUser()` del servidor (`src/lib/server/auth.ts`), sincronizan el perfil, bloquean cuentas suspendidas y aplican roles. No se usa `@supabase/ssr` ni cookies de sesión.
 3. **Bloqueo de filas (`FOR UPDATE`) con orden determinista** (mercado → usuario) para evitar deadlocks y dobles gastos. Los `UPDATE` de saldo validan el resultado con `IF NOT FOUND` (nunca se pierde dinero por un update silencioso).
 4. **Webhook Binance verificado con RSA-SHA256 asíncrono** (`crypto.verify`), seleccionando el certificado por la cabecera `Binancepay-Certificate-SN` contra los certificados publicados por Binance (`/binancepay/openapi/certificates`). Opcionalmente se puede fijar `BINANCE_PAY_CERT_SN` y/o `BINANCE_PAY_PUBLIC_KEY`. El cuerpo se lee SIEMPRE con `request.text()` (raw) antes de cualquier parseo. No hay fallback HMAC para webhooks.

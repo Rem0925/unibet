@@ -6,6 +6,8 @@
 --      MULTIPLICADOR de 20x: si el pozo pagaría más de 20x, el excedente
 --      va íntegro a la casa (HOUSE_WIN).
 --   3. Si gana una opción sin apuestas: 70% Casa + 30% creador.
+-- La casa es UNA sola cuenta: la primera ADMIN activa creada
+-- (fn_house_admin_id); toda recaudación va ahí, nunca repartida.
 -- ====================================================================
 -- Ejecutar este archivo completo en el SQL Editor de Supabase. Es
 -- idempotente: se puede volver a ejecutar para actualizar funciones,
@@ -399,6 +401,24 @@ GROUP BY b.market_id, b.selected_option;
 -- PROCEDIMIENTOS ALMACENADOS
 -- ====================================================================
 
+-- 0. Cuenta única de la casa: SIEMPRE la primera cuenta ADMIN activa creada.
+--    Toda la recaudación de la casa (comisión del 1.5%, excedente del tope
+--    de multiplicador, pozo huérfano) va a ESA única cuenta; nunca se
+--    reparte entre los demás administradores. La función es interna de las
+--    demás RPCs de dinero.
+CREATE OR REPLACE FUNCTION public.fn_house_admin_id()
+RETURNS UUID
+LANGUAGE sql
+STABLE
+SET search_path = public, pg_temp
+AS $$
+    SELECT id
+    FROM public.users
+    WHERE role = 'ADMIN' AND is_banned = FALSE
+    ORDER BY created_at ASC
+    LIMIT 1;
+$$;
+
 -- 1. Acreditar depósito de Binance Pay (1.5% de comisión de entrada).
 --    La transacción PENDING creada por /api/wallet/deposit es la fuente de
 --    verdad del usuario y del monto; el webhook no puede inventar una orden.
@@ -458,11 +478,9 @@ BEGIN
         RAISE EXCEPTION 'El monto del webhook no coincide con la orden';
     END IF;
 
-    SELECT id INTO v_admin_id
-    FROM public.users
-    WHERE role = 'ADMIN' AND is_banned = FALSE
-    ORDER BY created_at ASC
-    LIMIT 1;
+    -- Cuenta única de la casa (la primera ADMIN activa): toda la comisión
+    -- va a esa sola cuenta, nunca repartida entre administradores.
+    v_admin_id := public.fn_house_admin_id();
 
     IF v_admin_id IS NULL THEN
         -- Sin administrador configurado, se acredita el 100% para no perder
@@ -701,11 +719,9 @@ BEGIN
         RAISE EXCEPTION 'La opción ganadora no existe en este mercado';
     END IF;
 
-    SELECT id INTO v_admin_id
-    FROM public.users
-    WHERE role = 'ADMIN' AND is_banned = FALSE
-    ORDER BY created_at ASC
-    LIMIT 1;
+    -- Cuenta única de la casa (la primera ADMIN activa): pozo huérfano y
+    -- excedente del tope de multiplicador van a esa sola cuenta.
+    v_admin_id := public.fn_house_admin_id();
 
     IF v_market.total_pool = 0 THEN
         UPDATE public.markets
@@ -1422,6 +1438,7 @@ $$;
 REVOKE ALL ON FUNCTION public.fn_credit_deposit(UUID, NUMERIC, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_place_bet(UUID, UUID, TEXT, NUMERIC) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_resolve_market(UUID, TEXT, UUID) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.fn_house_admin_id() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_close_market(UUID, UUID) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_cancel_market(UUID, UUID, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_start_withdrawal(UUID, NUMERIC, TEXT, TEXT) FROM PUBLIC;
@@ -1433,6 +1450,7 @@ REVOKE ALL ON FUNCTION public.fn_fail_deposit(TEXT, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_credit_deposit(UUID, NUMERIC, TEXT) FROM anon, authenticated;
 REVOKE ALL ON FUNCTION public.fn_place_bet(UUID, UUID, TEXT, NUMERIC) FROM anon, authenticated;
 REVOKE ALL ON FUNCTION public.fn_resolve_market(UUID, TEXT, UUID) FROM anon, authenticated;
+REVOKE ALL ON FUNCTION public.fn_house_admin_id() FROM anon, authenticated;
 REVOKE ALL ON FUNCTION public.fn_close_market(UUID, UUID) FROM anon, authenticated;
 REVOKE ALL ON FUNCTION public.fn_cancel_market(UUID, UUID, TEXT) FROM anon, authenticated;
 REVOKE ALL ON FUNCTION public.fn_start_withdrawal(UUID, NUMERIC, TEXT, TEXT) FROM anon, authenticated;
@@ -1485,4 +1503,8 @@ REVOKE ALL ON FUNCTION public.fn_set_updated_at() FROM PUBLIC;
 --    src/lib/constants.ts (deben coincidir).
 -- 7. Comisión de recarga: 1.5% (fn_credit_deposit). Para cambiarla, ajusta
 --    el literal 0.015 y DEPOSIT_FEE_RATE en src/lib/constants.ts.
+-- 8. La casa es UNA sola cuenta: la primera ADMIN activa creada
+--    (fn_house_admin_id). Toda la recaudación (comisión 1.5%, excedente del
+--    tope 20x, pozo huérfano) va a esa única cuenta, nunca repartida entre
+--    admins. No anuncies este reparto en la interfaz de usuarios normales.
 -- ====================================================================

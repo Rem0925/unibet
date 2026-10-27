@@ -526,7 +526,8 @@ export function Terminal({
                   </li>
                   <li className="flex gap-1.5">
                     <span className="text-[#f59e0b]">03</span>
-                    Si gana una opción sin apuestas, el pozo se reparte 70% casa / 30% creador.
+                    Si gana una opción que nadie apostó, el creador del mercado recibe una parte
+                    del pozo.
                   </li>
                 </ul>
               </section>
