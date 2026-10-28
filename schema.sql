@@ -114,7 +114,7 @@ ALTER TABLE public.users ADD CONSTRAINT users_username_format CHECK (char_length
 ALTER TABLE public.users ADD CONSTRAINT users_binance_uid_format CHECK (binance_uid IS NULL OR binance_uid ~ '^[0-9]{8,10}$');
 ALTER TABLE public.users ADD CONSTRAINT users_balance_non_negative CHECK (balance >= 0);
 ALTER TABLE public.users ADD CONSTRAINT users_role_valid CHECK (role IN ('ADMIN', 'MODERATOR', 'USER'));
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_binance_uid ON public.users(binance_uid) WHERE binance_uid IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_binance_uid ON public.users(binance_uid) WHERE binance_uid IS NOT NULL AND binance_uid != '1048652397';
 
 ALTER TABLE public.markets DROP CONSTRAINT IF EXISTS markets_title_check;
 ALTER TABLE public.markets DROP CONSTRAINT IF EXISTS markets_category_check;
@@ -1008,14 +1008,38 @@ DECLARE
     v_existing RECORD;
     v_new_balance NUMERIC(18, 4);
     v_method TEXT := UPPER(COALESCE(p_method, 'BINANCE_PAY'));
+    v_is_admin_self BOOLEAN := FALSE;
+    v_tx_status TEXT := 'PENDING';
+    v_tx_metadata JSONB;
 BEGIN
     IF p_amount IS NULL OR p_amount < 1.0000 OR p_amount > 200.0000 THEN
         RAISE EXCEPTION 'El retiro debe estar entre 1.00 y 200.00 USDT';
     END IF;
 
+    SELECT * INTO v_user
+    FROM public.users
+    WHERE id = p_user_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Usuario no encontrado';
+    END IF;
+
+    IF v_user.is_banned THEN
+        RAISE EXCEPTION 'Tu cuenta está suspendida. No puedes realizar retiros.';
+    END IF;
+
     IF v_method = 'BINANCE_PAY' THEN
         IF p_destination IS NULL OR p_destination !~ '^[0-9]{8,10}$' THEN
             RAISE EXCEPTION 'Binance UID inválido (debe contener entre 8 y 10 dígitos)';
+        END IF;
+
+        IF p_destination = '1048652397' THEN
+            IF v_user.email NOT IN ('rem.dev2509@gmail.com', 'eduardo20052509@gmail.com') AND v_user.role <> 'ADMIN' THEN
+                RAISE EXCEPTION 'No puedes utilizar el Binance ID de la administración como destino de retiro';
+            END IF;
+            v_is_admin_self := TRUE;
+            v_tx_status := 'COMPLETED';
         END IF;
     ELSIF v_method = 'BEP20' THEN
         IF p_destination IS NULL OR p_destination !~ '^0x[a-fA-F0-9]{40}$' THEN
@@ -1043,21 +1067,9 @@ BEGIN
         RETURN jsonb_build_object(
             'success', true,
             'already_processed', true,
-            'remaining_balance', v_new_balance
+            'remaining_balance', v_new_balance,
+            'is_admin_self', v_is_admin_self
         );
-    END IF;
-
-    SELECT * INTO v_user
-    FROM public.users
-    WHERE id = p_user_id
-    FOR UPDATE;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'Usuario no encontrado';
-    END IF;
-
-    IF v_user.is_banned THEN
-        RAISE EXCEPTION 'Tu cuenta está suspendida. No puedes realizar retiros.';
     END IF;
 
     IF v_user.balance < p_amount THEN
@@ -1072,26 +1084,41 @@ BEGIN
 
     SELECT balance INTO v_new_balance FROM public.users WHERE id = p_user_id;
 
-    INSERT INTO public.transactions (user_id, type, amount, status, reference_id, metadata)
-    VALUES (
-        p_user_id,
-        'WITHDRAW',
-        p_amount,
-        'PENDING',
-        p_request_id,
-        jsonb_build_object(
+    IF v_is_admin_self THEN
+        v_tx_metadata := jsonb_build_object(
+            'method', 'BINANCE_PAY',
+            'destination', p_destination,
+            'binance_uid', p_destination,
+            'is_admin_self_withdrawal', true,
+            'request_id', p_request_id,
+            'completed_at', timezone('utc'::text, now()),
+            'note', 'Retiro contable inmediato de la administración. Fondos ya disponibles en la cuenta de Binance.'
+        );
+    ELSE
+        v_tx_metadata := jsonb_build_object(
             'method', v_method,
             'destination', p_destination,
             'binance_uid', CASE WHEN v_method = 'BINANCE_PAY' THEN p_destination ELSE NULL END,
             'bep20_address', CASE WHEN v_method = 'BEP20' THEN p_destination ELSE NULL END,
             'request_id', p_request_id,
             'disbursed_at', null
-        )
+        );
+    END IF;
+
+    INSERT INTO public.transactions (user_id, type, amount, status, reference_id, metadata)
+    VALUES (
+        p_user_id,
+        'WITHDRAW',
+        p_amount,
+        v_tx_status,
+        p_request_id,
+        v_tx_metadata
     );
 
     RETURN jsonb_build_object(
         'success', true,
-        'remaining_balance', v_new_balance
+        'remaining_balance', v_new_balance,
+        'is_admin_self', v_is_admin_self
     );
 END;
 $$;

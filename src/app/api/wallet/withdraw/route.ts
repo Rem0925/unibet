@@ -236,8 +236,30 @@ export async function POST(request: NextRequest) {
     }
 
     // ==========================================
-    // MÉTODO 2: RETIRO VÍA BINANCE PAY (0% COMISIÓN, 1-CLICK ADMIN)
+    // MÉTODO 2: RETIRO VÍA BINANCE PAY (0% COMISIÓN)
     // ==========================================
+    const isAdminSelf = Boolean((withdrawalResult as Record<string, unknown>).is_admin_self);
+
+    if (isAdminSelf) {
+      await logAudit({
+        actorId: profile.id,
+        action: 'WITHDRAW_ADMIN_SELF_COMPLETED',
+        metadata: { requestId, amount, binanceUid: destination },
+      });
+
+      const response: WithdrawResponse = {
+        success: true,
+        status: 'COMPLETED',
+        message: `Retiro de administración procesado al instante. Se descontaron $${amount.toFixed(2)} USDT de tu saldo contable en la plataforma; los fondos ya están en tu cuenta de Binance.`,
+        remainingBalance,
+        method: 'BINANCE_PAY',
+        payoutAmount: amount.toFixed(2),
+        networkFee: '0.00',
+      };
+
+      return NextResponse.json(response);
+    }
+
     const { data: txRow } = await supabase
       .from('transactions')
       .select('metadata')
