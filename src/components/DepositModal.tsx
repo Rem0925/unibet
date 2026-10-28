@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import QRCode from 'qrcode';
 import {
   ArrowRight,
   CheckCircle2,
@@ -38,11 +39,39 @@ export function DepositModal({
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paid, setPaid] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const startBalance = useRef(Number.parseFloat(profile.balance) || 0);
 
   const gross = Math.round((Number.parseFloat(amount) || 0) * 100) / 100;
   const fee = useMemo(() => Math.round(gross * DEPOSIT_FEE_RATE * 100) / 100, [gross]);
-  const net = Math.max(0, gross - fee);
+  const net = Math.max(0, Math.round((gross - fee) * 100) / 100);
+
+  // Generar código QR dinámico cuando la orden esté lista
+  useEffect(() => {
+    if (!order?.adminPayId) {
+      setQrDataUrl(null);
+      return;
+    }
+    let active = true;
+    QRCode.toDataURL(order.adminPayId, {
+      width: 220,
+      margin: 1,
+      color: {
+        dark: '#000000',
+        light: '#ffffff',
+      },
+    })
+      .then((url) => {
+        if (active) setQrDataUrl(url);
+      })
+      .catch((err) => {
+        console.error('Error generando QR de Binance:', err);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [order?.adminPayId]);
 
   useEffect(() => {
     if (!order || paid) return;
@@ -152,7 +181,7 @@ export function DepositModal({
   return (
     <Modal
       title="Recargar saldo"
-      subtitle="Deposita USDT directo a través de Binance Pay sin comisiones."
+      subtitle="Deposita USDT directo a través de Binance Pay al instante."
       icon={<QrCode className="h-5 w-5 text-[#00f090]" />}
       onClose={onClose}
     >
@@ -178,12 +207,12 @@ export function DepositModal({
         </div>
       ) : order ? (
         <div className="space-y-4">
-          {/* Tarjeta de Resumen */}
-          <div className="rounded-xl border border-[#00f090]/30 bg-[#00f090]/10 p-3.5">
+          {/* Tarjeta de Resumen con Comisión 1.5% */}
+          <div className="rounded-xl border border-[#00f090]/30 bg-[#00f090]/10 p-3.5 space-y-2">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-white">Monto exacto a transferir:</span>
+              <span className="font-semibold text-white">Monto a transferir:</span>
               <div className="flex items-center gap-2">
-                <span className="font-mono text-base font-bold text-[#00f090]">
+                <span className="font-mono text-base font-bold text-white">
                   ${formatUsdt(gross)} USDT
                 </span>
                 <button
@@ -192,15 +221,41 @@ export function DepositModal({
                   className="flex items-center gap-1 rounded bg-[#00f090]/20 hover:bg-[#00f090]/30 px-2 py-0.5 text-[11px] font-bold text-[#00f090] transition"
                 >
                   <Copy className="h-3 w-3" />
-                  Copiar
+                  Copiar Monto
                 </button>
               </div>
             </div>
-            <p className="mt-1 text-[11px] text-slate-300">
-              Comisión de depósito: <strong className="text-white">0% ($0.00 USDT)</strong>. Se te
-              acreditarán exactamente <strong className="font-mono text-white">${formatUsdt(gross)} USDT</strong>.
-            </p>
+            <div className="pt-2 border-t border-[#00f090]/20 space-y-1 text-xs">
+              <div className="flex justify-between text-slate-300 text-[11px]">
+                <span>Comisión de recarga de la casa (1.5%):</span>
+                <span className="font-mono text-amber-400">-${formatUsdt(fee)} USDT</span>
+              </div>
+              <div className="flex justify-between font-bold text-white text-[11px]">
+                <span>Saldo neto que se acreditará en tu cuenta:</span>
+                <span className="font-mono text-[#00f090] text-sm">${formatUsdt(net)} USDT</span>
+              </div>
+            </div>
           </div>
+
+          {/* Código QR de Binance Pay */}
+          {qrDataUrl ? (
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-4 text-center">
+              <div className="rounded-2xl bg-white p-3 shadow-xl shadow-black/40">
+                <img
+                  src={qrDataUrl}
+                  alt="QR Binance Pay"
+                  className="h-44 w-44 rounded-lg object-contain"
+                />
+              </div>
+              <div className="mt-3 flex items-center gap-1.5 text-xs font-bold text-white">
+                <QrCode className="h-4 w-4 text-[#00f090]" />
+                <span>Escanea con el lector QR de Binance</span>
+              </div>
+              <p className="mt-0.5 text-[11px] text-slate-400">
+                Abre la app de Binance y pulsa el icono de escanear [ - ] arriba a la derecha.
+              </p>
+            </div>
+          ) : null}
 
           {/* Botón directo a Binance Pay */}
           <div className="space-y-1.5">
@@ -390,12 +445,12 @@ export function DepositModal({
               <span className="font-mono text-white">${formatUsdt(gross)} USDT</span>
             </div>
             <div className="flex justify-between text-slate-400">
-              <span>Comisión de recarga (0%):</span>
-              <span className="font-mono text-[#00f090]">0.00 USDT</span>
+              <span>Comisión de recarga (1.5%):</span>
+              <span className="font-mono text-amber-400">-${formatUsdt(fee)} USDT</span>
             </div>
             <div className="flex justify-between border-t border-[#1e2330] pt-2 font-bold text-white">
               <span>Saldo que recibirás:</span>
-              <span className="font-mono text-[#00f090]">${formatUsdt(gross)} USDT</span>
+              <span className="font-mono text-[#00f090]">${formatUsdt(net)} USDT</span>
             </div>
           </div>
 
@@ -415,7 +470,7 @@ export function DepositModal({
           </button>
 
           <p className="text-center text-[11px] text-slate-500">
-            Mínimo ${formatUsdt(DEPOSIT_MIN)} y máximo ${formatUsdt(DEPOSIT_MAX)} USDT. Sin comisiones.
+            Mínimo ${formatUsdt(DEPOSIT_MIN)} y máximo ${formatUsdt(DEPOSIT_MAX)} USDT. Comisión de recarga del 1.5%.
           </p>
         </form>
       )}

@@ -154,7 +154,7 @@ export function WalletView({
           </div>
           <div className="mt-3 flex items-start gap-1.5 font-mono text-[9px] leading-relaxed text-slate-600">
             <Info className="mt-0.5 h-3 w-3 shrink-0" />
-            Recargas con Binance Pay: 0% de comisión de entrada, acreditada al instante. Los
+            Recargas con Binance Pay: 1.5% de comisión de entrada, acreditada al instante. Los
             retiros a tu UID no tienen comisión.
           </div>
         </section>

@@ -430,8 +430,15 @@ BEGIN
         RAISE EXCEPTION 'El monto del webhook no coincide con la orden';
     END IF;
 
-    v_fee_amount := 0;
-    v_net_amount := p_gross_amount;
+    v_admin_id := public.fn_house_admin_id();
+
+    IF v_admin_id IS NULL THEN
+        v_fee_amount := 0;
+    ELSE
+        v_fee_amount := ROUND(p_gross_amount * 0.015, 2);
+    END IF;
+
+    v_net_amount := p_gross_amount - v_fee_amount;
 
     UPDATE public.transactions
     SET status = 'COMPLETED',
@@ -440,14 +447,36 @@ BEGIN
             'gross_amount', p_gross_amount,
             'fee_amount', v_fee_amount,
             'net_amount', v_net_amount,
-            'credited_at', timezone('utc'::text, now())
+            'fee_rate', 0.015,
+            'credited_at', timezone('utc', now())
         ),
-        updated_at = timezone('utc'::text, now())
+        updated_at = timezone('utc', now())
     WHERE id = v_tx.id;
+
+    IF v_fee_amount > 0 AND v_admin_id IS NOT NULL THEN
+        UPDATE public.users
+        SET balance = balance + v_fee_amount,
+            updated_at = timezone('utc', now())
+        WHERE id = v_admin_id;
+
+        INSERT INTO public.transactions (user_id, type, amount, status, metadata)
+        VALUES (
+            v_admin_id,
+            'FEE_DEPOSIT',
+            v_fee_amount,
+            'COMPLETED',
+            jsonb_build_object(
+                'deposit_tx_id', v_tx.id,
+                'source_user_id', p_user_id,
+                'gross_amount', p_gross_amount,
+                'fee_rate', 0.015
+            )
+        );
+    END IF;
 
     UPDATE public.users
     SET balance = balance + v_net_amount,
-        updated_at = timezone('utc'::text, now())
+        updated_at = timezone('utc', now())
     WHERE id = p_user_id;
 
     RETURN jsonb_build_object(
