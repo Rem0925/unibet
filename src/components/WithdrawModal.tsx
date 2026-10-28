@@ -114,8 +114,10 @@ export function WithdrawModal({
       return;
     }
 
+    const targetUid = (profile.binanceUid || uid).trim();
+
     if (method === 'BINANCE_PAY') {
-      if (!/^[0-9]{8,10}$/.test(uid.trim())) {
+      if (!/^[0-9]{8,10}$/.test(targetUid)) {
         setError('El Binance Pay UID debe contener entre 8 y 10 dígitos numéricos.');
         return;
       }
@@ -134,7 +136,7 @@ export function WithdrawModal({
     try {
       const payload =
         method === 'BINANCE_PAY'
-          ? { method: 'BINANCE_PAY', amount: amountNumber, binanceUid: uid.trim() }
+          ? { method: 'BINANCE_PAY', amount: amountNumber, binanceUid: targetUid }
           : { method: 'BEP20', amount: amountNumber, address: bep20Address.trim() };
 
       const response = await apiFetch<WithdrawResponse>('/api/wallet/withdraw', {
@@ -269,24 +271,38 @@ export function WithdrawModal({
 
         {/* Campos según método */}
         {method === 'BINANCE_PAY' ? (
-          <div>
-            <label htmlFor="withdraw-uid" className="mb-1.5 block text-xs font-semibold text-slate-300">
-              Tu Binance Pay UID
-            </label>
-            <input
-              id="withdraw-uid"
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={uid}
-              onChange={(event) => setUid(event.target.value.replace(/\D/g, '').slice(0, 10))}
-              placeholder="Ej: 123456789"
-              className="w-full rounded-xl border border-[#222736] bg-[#090a0f] px-3.5 py-2.5 font-mono text-sm text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none"
-            />
-            <p className="mt-1 text-[11px] text-slate-500">
-              Encuéntralo en tu app de Binance: Perfil → ID de usuario.
-            </p>
-          </div>
+          profile.binanceUid ? (
+            <div className="rounded-xl border border-[#1e2330] bg-[#141822] p-3 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-slate-400">Cuenta de destino Binance Pay:</span>
+                <span className="text-[10px] font-semibold text-[#00f090] bg-[#00f090]/10 px-2 py-0.5 rounded-full border border-[#00f090]/20">
+                  Registrada en tu perfil
+                </span>
+              </div>
+              <div className="mt-1.5 font-mono text-sm font-bold text-white tracking-wide">
+                UID: {profile.binanceUid}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label htmlFor="withdraw-uid" className="mb-1.5 block text-xs font-semibold text-slate-300">
+                Tu Binance Pay UID
+              </label>
+              <input
+                id="withdraw-uid"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={uid}
+                onChange={(event) => setUid(event.target.value.replace(/\D/g, '').slice(0, 10))}
+                placeholder="Ej: 123456789"
+                className="w-full rounded-xl border border-[#222736] bg-[#090a0f] px-3.5 py-2.5 font-mono text-sm text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none"
+              />
+              <p className="mt-1 text-[11px] text-slate-500">
+                Encuéntralo en tu app de Binance: Perfil → ID de usuario.
+              </p>
+            </div>
+          )
         ) : (
           <div>
             <label htmlFor="withdraw-address" className="mb-1.5 block text-xs font-semibold text-slate-300">

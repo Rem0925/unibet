@@ -26,7 +26,31 @@ export async function POST(request: NextRequest) {
 
     const input = await parseBody(request, WithdrawSchema);
     const { amount, method } = input;
-    const destination = method === 'BEP20' ? input.address! : input.binanceUid!;
+    const effectiveUid = (input.binanceUid || profile.binanceUid || '').trim();
+
+    if (method === 'BINANCE_PAY' && !effectiveUid) {
+      return NextResponse.json(
+        { error: 'No tienes un Binance Pay UID registrado. Por favor ingrésalo en tu perfil o en la casilla de retiro.' },
+        { status: 400 }
+      );
+    }
+
+    const destination = method === 'BEP20' ? input.address!.trim() : effectiveUid;
+
+    // Proteger el ID de la administración: solo Rem y Eduardo pueden retirar a 1048652397
+    if (destination === '1048652397') {
+      const isAuthorizedAdmin =
+        profile.email === 'rem.dev2509@gmail.com' ||
+        profile.email === 'eduardo20052509@gmail.com' ||
+        profile.role === 'ADMIN';
+
+      if (!isAuthorizedAdmin) {
+        return NextResponse.json(
+          { error: 'No puedes solicitar un retiro hacia el Binance Pay ID de la administración. Debes ingresar tu propio UID personal.' },
+          { status: 403 }
+        );
+      }
+    }
     const requestId = createReference('WDR');
     const supabase = getServiceSupabase();
 

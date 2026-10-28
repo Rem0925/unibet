@@ -128,13 +128,6 @@ export const WithdrawSchema = z
   })
   .strict()
   .superRefine((data, ctx) => {
-    if (data.method === 'BINANCE_PAY' && !data.binanceUid) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['binanceUid'],
-        message: 'Debes proporcionar un Binance UID válido para retiros por Binance Pay',
-      });
-    }
     if (data.method === 'BEP20' && !data.address) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

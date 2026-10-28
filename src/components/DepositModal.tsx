@@ -308,24 +308,38 @@ export function DepositModal({
             ))}
           </div>
 
-          <div>
-            <label htmlFor="deposit-uid" className="mb-1.5 block text-xs font-semibold text-slate-300">
-              Tu Binance UID (ID de usuario)
-            </label>
-            <input
-              id="deposit-uid"
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={uid}
-              onChange={(event) => setUid(event.target.value.replace(/\D/g, '').slice(0, 10))}
-              placeholder="Ej: 123456789"
-              className="w-full rounded-xl border border-[#222736] bg-[#090a0f] px-3.5 py-2.5 font-mono text-sm text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none"
-            />
-            <p className="mt-1 text-[11px] text-slate-500">
-              Permite conciliar tu pago al instante cuando transfieras desde tu app.
-            </p>
-          </div>
+          {profile.binanceUid ? (
+            <div className="rounded-xl border border-[#1e2330] bg-[#141822] p-3 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-slate-400">Cuenta Binance que envía:</span>
+                <span className="text-[10px] font-semibold text-[#00f090] bg-[#00f090]/10 px-2 py-0.5 rounded-full border border-[#00f090]/20">
+                  Vinculada a tu perfil
+                </span>
+              </div>
+              <div className="mt-1.5 font-mono text-sm font-bold text-white tracking-wide">
+                UID: {profile.binanceUid}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label htmlFor="deposit-uid" className="mb-1.5 block text-xs font-semibold text-slate-300">
+                Tu Binance UID (ID de usuario)
+              </label>
+              <input
+                id="deposit-uid"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={uid}
+                onChange={(event) => setUid(event.target.value.replace(/\D/g, '').slice(0, 10))}
+                placeholder="Ej: 123456789"
+                className="w-full rounded-xl border border-[#222736] bg-[#090a0f] px-3.5 py-2.5 font-mono text-sm text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none"
+              />
+              <p className="mt-1 text-[11px] text-slate-500">
+                Permite conciliar tu pago al instante cuando transfieras desde tu app.
+              </p>
+            </div>
+          )}
 
           <div className="space-y-2 rounded-xl border border-[#1e2330] bg-[#141822]/60 p-3.5 text-xs">
             <div className="flex justify-between text-slate-400">
