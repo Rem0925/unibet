@@ -50,7 +50,7 @@ interface ToastItem {
 }
 
 interface BetSlipState {
-  market: MarketSummary;
+  marketId: string;
   option: string;
 }
 
@@ -204,6 +204,10 @@ export function Terminal({
     if (walletState !== 'deposit-success' && walletState !== 'deposit-cancelled') return;
 
     const timer = window.setTimeout(() => {
+      if (walletState === 'deposit-success') {
+        void refreshProfile();
+        void loadTransactions(true);
+      }
       showToast(
         walletState === 'deposit-success'
           ? 'Pago recibido. La acreditación automática puede tardar unos segundos.'
@@ -258,7 +262,7 @@ export function Terminal({
       const response = await apiFetch<{ message: string }>('/api/bets/place', {
         method: 'POST',
         body: JSON.stringify({
-          marketId: betSlip.market.id,
+          marketId: betSlip.marketId,
           selectedOption: betSlip.option,
           amount,
         }),
@@ -289,13 +293,18 @@ export function Terminal({
   };
 
   const openBetSlip = (market: MarketSummary, option: string) => {
-    setBetSlip({ market, option });
+    setBetSlip({ marketId: market.id, option });
   };
+
+  const activeSlipMarket = useMemo(() => {
+    if (!betSlip) return null;
+    return markets.find((m) => m.id === betSlip.marketId) ?? null;
+  }, [markets, betSlip]);
 
   const userActiveInMarket = useMemo(() => {
     if (!betSlip) return 0;
     return bets
-      .filter((b) => b.marketId === betSlip.market.id && b.status === 'ACTIVE')
+      .filter((b) => b.marketId === betSlip.marketId && b.status === 'ACTIVE')
       .reduce((sum, b) => sum + (Number.parseFloat(b.amount) || 0), 0);
   }, [bets, betSlip]);
 
@@ -663,10 +672,10 @@ export function Terminal({
         </div>
       ) : null}
 
-      {betSlip ? (
+      {activeSlipMarket && betSlip ? (
         <BetSlip
-          key={`${betSlip.market.id}:${betSlip.option}`}
-          market={betSlip.market}
+          key={`${activeSlipMarket.id}:${betSlip.option}`}
+          market={activeSlipMarket}
           option={betSlip.option}
           balance={Number.parseFloat(profile.balance) || 0}
           placing={placing}

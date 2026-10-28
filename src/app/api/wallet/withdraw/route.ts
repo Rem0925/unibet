@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       });
 
       const payoutStatus = payoutResult.status;
-      const completed = !payoutStatus || payoutStatus === 'SUCCESS';
+      const completed = payoutStatus === 'SUCCESS';
 
       const { data: txRow } = await supabase
         .from('transactions')

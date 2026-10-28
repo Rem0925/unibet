@@ -61,14 +61,31 @@ export interface ProfileOptions {
 export async function ensureProfile(user: User, options?: ProfileOptions): Promise<UserProfile> {
   const existing = await findProfile(user.id);
   const email = user.email ?? `${user.id}@users.local`;
-  const cleanEmail = email.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const isAdmin = cleanEmail.includes('remdev2509');
 
   if (existing) {
     const updates: Record<string, unknown> = {};
-    if (isAdmin && existing.role !== 'ADMIN') {
-      updates.role = 'ADMIN';
+
+    const desiredUsername =
+      options?.username?.trim() ??
+      (typeof user.user_metadata?.username === 'string' ? user.user_metadata.username.trim() : undefined);
+
+    if (
+      desiredUsername &&
+      /^[a-zA-Z0-9_]{3,24}$/.test(desiredUsername) &&
+      desiredUsername.toLowerCase() !== existing.username.toLowerCase()
+    ) {
+      const { data: taken } = await getServiceSupabase()
+        .from('users')
+        .select('id')
+        .eq('username', desiredUsername.toLowerCase())
+        .neq('id', user.id)
+        .maybeSingle();
+
+      if (!taken) {
+        updates.username = desiredUsername.toLowerCase();
+      }
     }
+
     const desiredBinance =
       options?.binanceUid ??
       (typeof user.user_metadata?.binance_uid === 'string' ? user.user_metadata.binance_uid : undefined);
@@ -96,7 +113,7 @@ export async function ensureProfile(user: User, options?: ProfileOptions): Promi
     (typeof user.user_metadata?.username === 'string' ? user.user_metadata.username : undefined);
   const base =
     rawRequestedUsername && /^[a-zA-Z0-9_]{3,24}$/.test(rawRequestedUsername)
-      ? rawRequestedUsername
+      ? rawRequestedUsername.toLowerCase()
       : normalizeUsernameBase(user.email, fullName, user.id);
 
   const desiredBinance =
@@ -114,7 +131,7 @@ export async function ensureProfile(user: User, options?: ProfileOptions): Promi
         id: user.id,
         username,
         email,
-        role: isAdmin ? 'ADMIN' : 'USER',
+        role: 'USER',
         balance: 0,
         binance_uid: binanceUid,
       })

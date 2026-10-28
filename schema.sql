@@ -227,7 +227,7 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS 31985
+AS $$
 DECLARE
     v_base TEXT;
     v_username TEXT;
@@ -265,7 +265,7 @@ BEGIN
 
     RETURN NEW;
 END;
-31985;
+$$;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
@@ -284,9 +284,9 @@ LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS 31985
+AS $$
     SELECT role FROM public.users WHERE id = auth.uid() AND is_banned = FALSE;
-31985;
+$$;
 
 DROP POLICY IF EXISTS "users_select_own" ON public.users;
 DROP POLICY IF EXISTS "users_select_admin" ON public.users;
@@ -370,7 +370,7 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS 31985
+AS $$
 DECLARE
     v_tx RECORD;
     v_user RECORD;
@@ -481,7 +481,7 @@ BEGIN
         'net_amount', v_net_amount
     );
 END;
-31985;
+$$;
 
 DROP FUNCTION IF EXISTS public.fn_place_bet(UUID, UUID, TEXT, NUMERIC);
 
@@ -606,7 +606,7 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS 31985
+AS $$
 DECLARE
     v_market RECORD;
     v_caller_role TEXT;
@@ -862,7 +862,7 @@ BEGIN
         'winners', v_winner_count
     );
 END;
-31985;
+$$;
 
 DROP FUNCTION IF EXISTS public.fn_close_market(UUID, UUID);
 
@@ -871,7 +871,7 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS 31985
+AS $$
 DECLARE
     v_role TEXT;
     v_banned BOOLEAN;
@@ -902,7 +902,7 @@ BEGIN
 
     RETURN jsonb_build_object('success', true, 'status', 'CLOSED');
 END;
-31985;
+$$;
 
 DROP FUNCTION IF EXISTS public.fn_cancel_market(UUID, UUID, TEXT);
 
@@ -915,7 +915,7 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS 31985
+AS $$
 DECLARE
     v_role TEXT;
     v_banned BOOLEAN;
@@ -995,7 +995,7 @@ BEGIN
         'refunded_bets', v_refunded_count
     );
 END;
-31985;
+$$;
 
 DROP FUNCTION IF EXISTS public.fn_start_withdrawal(UUID, NUMERIC, TEXT, TEXT);
 
@@ -1009,7 +1009,7 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS 31985
+AS $$
 DECLARE
     v_user RECORD;
     v_existing RECORD;
@@ -1089,7 +1089,7 @@ BEGIN
         'remaining_balance', v_new_balance
     );
 END;
-31985;
+$$;
 
 DROP FUNCTION IF EXISTS public.fn_refund_withdrawal(UUID, NUMERIC, TEXT, TEXT);
 
@@ -1202,7 +1202,7 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS 31985
+AS $$
 DECLARE
     v_admin_role TEXT;
     v_admin_banned BOOLEAN;
@@ -1271,7 +1271,7 @@ BEGIN
         )
     );
 END;
-31985;
+$$;
 
 DROP FUNCTION IF EXISTS public.fn_admin_overview(UUID);
 
@@ -1280,7 +1280,7 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS 31985
+AS $$
 DECLARE
     v_role TEXT;
     v_banned BOOLEAN;
@@ -1336,7 +1336,7 @@ BEGIN
 
     RETURN v_stats;
 END;
-31985;
+$$;
 
 DROP FUNCTION IF EXISTS public.fn_fail_deposit(TEXT, TEXT);
 

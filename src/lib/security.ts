@@ -133,7 +133,8 @@ export const ResolveMarketSchema = z
       .string()
       .trim()
       .min(1, { message: 'Debes seleccionar la opción ganadora' })
-      .max(50, { message: 'Opción inválida' }),
+      .max(50, { message: 'Opción inválida' })
+      .transform((value) => value.normalize('NFC')),
   })
   .strict();
 

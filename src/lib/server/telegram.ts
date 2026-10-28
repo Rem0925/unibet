@@ -30,6 +30,14 @@ export async function sendTelegramMessage(text: string): Promise<boolean> {
   }
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 export async function notifyNewMarket(params: {
   title: string;
   creator: string;
@@ -37,11 +45,11 @@ export async function notifyNewMarket(params: {
   options: string[];
   closeTime: string;
 }) {
-  const optionsText = params.options.map((opt, i) => `  ${i + 1}. <b>${opt}</b>`).join('\n');
+  const optionsText = params.options.map((opt, i) => `  ${i + 1}. <b>${escapeHtml(opt)}</b>`).join('\n');
   const message = `🔥 <b>¡Nueva Apuesta en UniBet!</b>\n\n` +
-    `📌 <b>${params.title}</b>\n` +
-    `🏷️ Categoría: <code>${params.category}</code>\n` +
-    `👤 Creador: @${params.creator}\n\n` +
+    `📌 <b>${escapeHtml(params.title)}</b>\n` +
+    `🏷️ Categoría: <code>${escapeHtml(params.category)}</code>\n` +
+    `👤 Creador: @${escapeHtml(params.creator)}\n\n` +
     `🎯 <b>Opciones disponibles:</b>\n${optionsText}\n\n` +
     `⏳ <i>¡Entra a la app a meterle dinero al pozo!</i>`;
 
@@ -54,8 +62,8 @@ export async function notifyMarketResolved(params: {
   totalPool: number;
 }) {
   const message = `🏆 <b>¡Mercado Liquidado en UniBet!</b>\n\n` +
-    `📌 <b>${params.title}</b>\n` +
-    `✅ <b>Resultado Ganador:</b> <code>${params.winner}</code>\n` +
+    `📌 <b>${escapeHtml(params.title)}</b>\n` +
+    `✅ <b>Resultado Ganador:</b> <code>${escapeHtml(params.winner)}</code>\n` +
     `💰 <b>Pozo Total Repartido:</b> $${params.totalPool.toFixed(2)} USDT\n\n` +
     `🎉 <i>¡Felicitaciones a los que acertaron el pronóstico!</i>`;
 
@@ -67,8 +75,8 @@ export async function notifyMarketCancelled(params: {
   reason: string;
 }) {
   const message = `⚠️ <b>Mercado Cancelado en UniBet</b>\n\n` +
-    `📌 <b>${params.title}</b>\n` +
-    `🛑 Motivo: <i>${params.reason}</i>\n\n` +
+    `📌 <b>${escapeHtml(params.title)}</b>\n` +
+    `🛑 Motivo: <i>${escapeHtml(params.reason)}</i>\n\n` +
     `🔄 <b>Se ha reembolsado el 100% del dinero apostado a cada amigo sin comisiones.</b>`;
 
   return sendTelegramMessage(message);

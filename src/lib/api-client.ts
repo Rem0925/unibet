@@ -65,6 +65,24 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   }
 
   if (!response.ok) {
+    if (response.status === 401) {
+      try {
+        const { data: refreshData } = await supabase.auth.refreshSession();
+        if (refreshData?.session?.access_token) {
+          headers.set('Authorization', `Bearer ${refreshData.session.access_token}`);
+          const retryRes = await fetch(path, {
+            ...init,
+            headers,
+            cache: 'no-store',
+          });
+          if (retryRes.ok) {
+            const retryRaw = await retryRes.text();
+            return (retryRaw ? JSON.parse(retryRaw) : null) as T;
+          }
+        }
+      } catch {}
+    }
+
     const message =
       isRecord(payload) && typeof payload.error === 'string'
         ? payload.error

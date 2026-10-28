@@ -71,7 +71,7 @@ export function MarketCard({
           <span>Distribución del pozo</span>
           <span className="flex items-center gap-1">
             <Clock className="h-3 w-3" />
-            {market.status === 'OPEN' ? timeUntil(market.closeTime) : formatShortDate(market.closeTime)}
+            {market.status === 'OPEN' ? timeUntil(market.closeTime, now) : formatShortDate(market.closeTime)}
           </span>
         </div>
         <div className="mb-3 flex h-1.5 w-full gap-0.5 overflow-hidden rounded-sm border border-[#252b3b] bg-[#181c26]">

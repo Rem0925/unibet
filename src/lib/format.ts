@@ -11,14 +11,14 @@ const compactUsdtFormatter = new Intl.NumberFormat('en-US', {
 export function formatUsdt(value: number | string | null | undefined): string {
   const number = typeof value === 'number' ? value : Number.parseFloat(value ?? '0');
   if (!Number.isFinite(number)) return '0.00';
-  const floored = Math.floor(number * 100) / 100;
+  const floored = Math.floor(number * 100 + 1e-6) / 100;
   return usdtFormatter.format(floored);
 }
 
 export function formatUsdtCompact(value: number | string | null | undefined): string {
   const number = typeof value === 'number' ? value : Number.parseFloat(value ?? '0');
   if (!Number.isFinite(number)) return '0';
-  const floored = Math.floor(number * 100) / 100;
+  const floored = Math.floor(number * 100 + 1e-6) / 100;
   return compactUsdtFormatter.format(floored);
 }
 
@@ -47,11 +47,11 @@ export function formatShortDate(value: string | null | undefined): string {
   }).format(date);
 }
 
-export function timeUntil(value: string): string {
+export function timeUntil(value: string, nowMs = Date.now()): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
 
-  const diff = date.getTime() - Date.now();
+  const diff = date.getTime() - nowMs;
   if (diff <= 0) return 'Cerrado';
 
   const minutes = Math.floor(diff / 60_000);

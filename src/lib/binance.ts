@@ -116,9 +116,10 @@ async function binancePost<T>(endpoint: string, body: unknown): Promise<BinanceE
   }
 
   if (payload.status !== 'SUCCESS') {
+    const isSystemError = payload.code?.startsWith('5') || payload.code === 'SYSTEM_ERROR' || payload.code === 'TIMEOUT';
     throw new BinanceApiError(
       payload.errorMessage || 'Binance Pay rechazó la operación',
-      true,
+      !isSystemError,
       payload.code || 'BINANCE_REJECTED'
     );
   }

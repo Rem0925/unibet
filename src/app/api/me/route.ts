@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { mapProfile, requireUser } from '@/lib/server/auth';
+import { logAudit } from '@/lib/server/audit';
 import { ApiError, jsonError } from '@/lib/server/http';
+import { enforceRateLimit } from '@/lib/server/rate-limit';
 import { getServiceSupabase } from '@/lib/server/supabase';
 
 export async function GET(request: NextRequest) {
@@ -15,6 +17,8 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const { user, profile } = await requireUser(request);
+    enforceRateLimit(`me-patch:${profile.id}`, 10, 60_000);
+
     const body = (await request.json()) as { binanceUid?: string; username?: string };
     const updates: Record<string, unknown> = {};
 
@@ -67,6 +71,12 @@ export async function PATCH(request: NextRequest) {
     if (error || !data) {
       throw new ApiError('No se pudo actualizar el perfil', 500, 'PROFILE_UPDATE_FAILED');
     }
+
+    await logAudit({
+      actorId: user.id,
+      action: 'USER_PROFILE_UPDATED',
+      metadata: { previous: { username: profile.username }, updates },
+    });
 
     return NextResponse.json({ profile: mapProfile(data) });
   } catch (error) {
