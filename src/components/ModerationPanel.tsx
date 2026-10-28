@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { AlertTriangle, Ban, CheckCircle2, Clock, ShieldCheck, Trophy } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Ban, CheckCircle2, Clock, ShieldCheck, Trophy } from 'lucide-react';
 import { useNow } from '@/hooks/useNow';
 import { apiFetch, errorMessage } from '@/lib/api-client';
 import { formatShortDate, formatUsdt } from '@/lib/format';
@@ -37,6 +37,7 @@ export function ModerationPanel({
   onCancel,
   onChanged,
   showToast,
+  onBackToMarkets,
 }: {
   markets: MarketSummary[];
   loading: boolean;
@@ -46,6 +47,7 @@ export function ModerationPanel({
   onCancel: (market: MarketSummary) => void;
   onChanged: () => Promise<void> | void;
   showToast: (message: string, type?: 'success' | 'warn' | 'error') => void;
+  onBackToMarkets?: () => void;
 }) {
   const [filter, setFilter] = useState<'ACTION' | 'ALL'>('ACTION');
   const [closingId, setClosingId] = useState<string | null>(null);
@@ -84,6 +86,19 @@ export function ModerationPanel({
 
   return (
     <div className="space-y-4 font-sans">
+      {onBackToMarkets && (
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={onBackToMarkets}
+            className="flex items-center gap-2 rounded-xl border border-[#1e2330] bg-[#141822] px-3.5 py-2 text-xs font-semibold text-slate-300 transition hover:border-[#00f090] hover:text-white"
+          >
+            <ArrowLeft className="h-4 w-4 text-[#00f090]" />
+            <span>Volver a Mercados</span>
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-col justify-between gap-3 rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-4 sm:flex-row sm:items-center">
         <div className="flex items-start gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-purple-500/10 text-purple-400">

@@ -405,8 +405,6 @@ export function Terminal({
         onWithdraw={() => setShowWithdraw(true)}
         onCreate={() => setShowCreate(true)}
         onLogout={onLogout}
-        onRefresh={() => void refreshAll()}
-        refreshing={refreshing}
       />
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 pb-24 pt-6 md:pb-12">
@@ -885,6 +883,7 @@ export function Terminal({
             onCancel={(m) => setCancelMarket(m)}
             onChanged={handleResolutionChanged}
             showToast={showToast}
+            onBackToMarkets={() => handleNavigate('EXPLORE')}
           />
         ) : null}
 
@@ -900,6 +899,7 @@ export function Terminal({
             onRetry={() => void loadAdmin()}
             onChanged={handleResolutionChanged}
             showToast={showToast}
+            onBackToMarkets={() => handleNavigate('EXPLORE')}
           />
         ) : null}
       </main>

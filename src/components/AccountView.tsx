@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowDownLeft,
+  ArrowLeft,
   ArrowUpRight,
   Check,
   CheckCircle2,
@@ -162,6 +163,18 @@ export function AccountView({
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
+      {/* Botón Volver a Mercados */}
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={onExplore}
+          className="flex items-center gap-2 rounded-xl border border-[#1e2330] bg-[#141822] px-3.5 py-2 text-xs font-semibold text-slate-300 transition hover:border-[#00f090] hover:text-white"
+        >
+          <ArrowLeft className="h-4 w-4 text-[#00f090]" />
+          <span>Volver a Mercados</span>
+        </button>
+      </div>
+
       {/* Tarjeta Superior: Perfil & Balance */}
       <div className="grid gap-4 md:grid-cols-3">
         {/* Perfil del Usuario */}

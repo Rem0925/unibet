@@ -2,25 +2,19 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  ArrowDownLeft,
-  ArrowUpRight,
   ChevronDown,
   Flame,
-  History,
   Layers,
   LogOut,
   Plus,
-  RefreshCw,
   Settings,
   ShieldCheck,
-  Ticket,
   TrendingUp,
   User,
   Wallet,
 } from 'lucide-react';
 import { formatUsdt } from '@/lib/format';
 import type { AppTab, Role, UserProfile } from '@/lib/types';
-import { Spinner } from './ui';
 
 export type AccountSubTab = 'BETS' | 'TRANSACTIONS' | 'SETTINGS';
 
@@ -32,8 +26,6 @@ interface NavigationProps {
   onWithdraw: () => void;
   onCreate: () => void;
   onLogout: () => void;
-  onRefresh: () => void;
-  refreshing: boolean;
 }
 
 export function Header({
@@ -41,11 +33,8 @@ export function Header({
   activeTab,
   onNavigate,
   onDeposit,
-  onWithdraw,
   onCreate,
   onLogout,
-  onRefresh,
-  refreshing,
 }: NavigationProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -69,92 +58,43 @@ export function Header({
   return (
     <header className="sticky top-0 z-40 border-b border-[#1e2330] bg-[#0c0d12]/95 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4">
-        {/* Logo UniBet */}
-        <div className="flex items-center gap-4">
+        {/* Logo UniBet: al hacer clic siempre vuelve al mercado principal */}
+        <button
+          type="button"
+          onClick={() => onNavigate('EXPLORE')}
+          className="flex shrink-0 items-center gap-2.5 transition hover:opacity-90"
+          aria-label="Ir a mercados UniBet"
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#00f090]/20 to-emerald-600/30 text-[#00f090] ring-1 ring-[#00f090]/30 shadow-lg shadow-[#00f090]/10">
+            <Flame className="h-5 w-5" />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xl font-black tracking-tight text-white">
+              Uni<span className="text-[#00f090]">Bet</span>
+            </span>
+            <span className="hidden sm:inline-block rounded-full bg-[#00f090]/10 px-2 py-0.5 text-[10px] font-bold text-[#00f090]">
+              PRO
+            </span>
+          </div>
+        </button>
+
+        {/* Zona Derecha: Saldo, Crear evento y Avatar con menú desplegable */}
+        <div className="flex items-center gap-2.5">
+          {/* Tarjeta de Saldo con clic directo a Cartera & Movimientos */}
           <button
             type="button"
-            onClick={() => onNavigate('EXPLORE')}
-            className="flex shrink-0 items-center gap-2.5 transition hover:opacity-90"
-            aria-label="Ir a inicio de UniBet"
+            onClick={() => onNavigate('ACCOUNT', 'TRANSACTIONS')}
+            className="flex items-center gap-2 rounded-xl border border-[#1e2330] bg-[#141822]/80 px-3 py-1.5 transition hover:border-[#2a3244] hover:bg-[#181d29]"
+            title="Ver cartera y movimientos"
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#00f090]/20 to-emerald-600/30 text-[#00f090] ring-1 ring-[#00f090]/30 shadow-lg shadow-[#00f090]/10">
-              <Flame className="h-5 w-5" />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xl font-black tracking-tight text-white">
-                Uni<span className="text-[#00f090]">Bet</span>
-              </span>
-              <span className="hidden sm:inline-block rounded-full bg-[#00f090]/10 px-2 py-0.5 text-[10px] font-bold text-[#00f090]">
-                PRO
+            <Wallet className="h-4 w-4 text-[#00f090]" />
+            <div className="flex flex-col text-left">
+              <span className="font-mono text-xs sm:text-sm font-bold text-white tabular-nums">
+                ${formatUsdt(profile.balance)}{' '}
+                <span className="text-[10px] font-normal text-slate-400">USDT</span>
               </span>
             </div>
           </button>
-
-          {/* Enlaces de barra de navegación principal (Sin pestaña 'Mi Cuenta') */}
-          <nav className="hidden md:flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => onNavigate('EXPLORE')}
-              className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
-                activeTab === 'EXPLORE'
-                  ? 'bg-[#181c26] text-white shadow-sm ring-1 ring-[#283042]'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Mercados
-            </button>
-            {isStaff ? (
-              <button
-                type="button"
-                onClick={() => onNavigate('MODERATION')}
-                className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
-                  activeTab === 'MODERATION'
-                    ? 'bg-purple-500/15 text-purple-300 ring-1 ring-purple-500/30'
-                    : 'text-purple-400/80 hover:text-purple-300'
-                }`}
-              >
-                Moderación
-              </button>
-            ) : null}
-            {profile.role === 'ADMIN' ? (
-              <button
-                type="button"
-                onClick={() => onNavigate('ADMIN')}
-                className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
-                  activeTab === 'ADMIN'
-                    ? 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30'
-                    : 'text-amber-400/80 hover:text-amber-300'
-                }`}
-              >
-                Finanzas
-              </button>
-            ) : null}
-          </nav>
-        </div>
-
-        {/* Zona Derecha: Saldo, Crear evento, y Avatar con menú desplegable */}
-        <div className="flex items-center gap-2.5">
-          {/* Tarjeta de Saldo con botón rápido de recarga */}
-          <div className="flex items-center rounded-xl border border-[#1e2330] bg-[#141822]/80 p-1 pl-3 transition hover:border-[#2a3244]">
-            <div className="flex items-center gap-2">
-              <Wallet className="h-4 w-4 text-[#00f090]" />
-              <div className="flex flex-col text-left">
-                <span className="font-mono text-xs sm:text-sm font-bold text-white tabular-nums">
-                  ${formatUsdt(profile.balance)}{' '}
-                  <span className="text-[10px] font-normal text-slate-400">USDT</span>
-                </span>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={onDeposit}
-              className="ml-2 flex h-7 w-7 items-center justify-center rounded-lg bg-[#00f090]/15 text-[#00f090] transition hover:bg-[#00f090] hover:text-slate-950"
-              title="Recargar saldo Binance Pay"
-              aria-label="Recargar saldo"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          </div>
 
           {/* Botón Crear Evento */}
           <button
@@ -165,18 +105,6 @@ export function Header({
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Crear evento</span>
             <span className="sm:hidden">Crear</span>
-          </button>
-
-          {/* Botón de refresco rápido */}
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={refreshing}
-            className="hidden sm:flex h-9 w-9 items-center justify-center rounded-xl border border-[#1e2330] bg-[#141822] text-slate-400 transition hover:text-white disabled:opacity-50"
-            title="Refrescar mercados"
-            aria-label="Refrescar mercados"
-          >
-            {refreshing ? <Spinner className="h-3.5 w-3.5" /> : <RefreshCw className="h-3.5 w-3.5" />}
           </button>
 
           {/* Avatar con nombre de la cuenta y menú desplegable */}
@@ -241,24 +169,6 @@ export function Header({
                       <span>Cartera & Movimientos</span>
                       <span className="font-mono text-[10px] text-slate-500">${formatUsdt(profile.balance)}</span>
                     </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleMenuSelect(onDeposit)}
-                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium text-slate-300 transition hover:bg-[#161a24] hover:text-white"
-                  >
-                    <ArrowDownLeft className="h-4 w-4 text-sky-400" />
-                    <span>Recargar saldo (Binance Pay)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleMenuSelect(onWithdraw)}
-                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium text-slate-300 transition hover:bg-[#161a24] hover:text-white"
-                  >
-                    <ArrowUpRight className="h-4 w-4 text-amber-400" />
-                    <span>Retirar a Binance</span>
                   </button>
 
                   <button
