@@ -136,6 +136,23 @@ function signSapiQuery(params: Record<string, string | number | boolean | undefi
   return `${queryString}&signature=${signature}`;
 }
 
+let proxyAgentInstance: unknown = null;
+
+function getProxyAgent(): unknown {
+  const proxyUrl = process.env.FIXIE_URL || process.env.STATIC_PROXY_URL || process.env.HTTP_PROXY;
+  if (!proxyUrl) return undefined;
+  if (!proxyAgentInstance) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { ProxyAgent } = require('undici');
+      proxyAgentInstance = new ProxyAgent(proxyUrl);
+    } catch {
+      proxyAgentInstance = null;
+    }
+  }
+  return proxyAgentInstance;
+}
+
 async function callBinanceSapi<T>(options: {
   method: 'GET' | 'POST';
   endpoint: string;
@@ -149,7 +166,8 @@ async function callBinanceSapi<T>(options: {
       ? `${config.baseUrl}${options.endpoint}?${signedQuery}`
       : `${config.baseUrl}${options.endpoint}`;
 
-  const fetchOptions: RequestInit = {
+  const agent = getProxyAgent();
+  const fetchOptions: RequestInit & { dispatcher?: unknown } = {
     method: options.method,
     headers: {
       'X-MBX-APIKEY': config.apiKey,
@@ -158,6 +176,7 @@ async function callBinanceSapi<T>(options: {
     ...(options.method === 'POST' ? { body: signedQuery } : {}),
     cache: 'no-store',
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    ...(agent ? { dispatcher: agent } : {}),
   };
 
   let response: Response;
