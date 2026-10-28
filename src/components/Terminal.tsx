@@ -2,18 +2,28 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  AlertCircle,
   AlertTriangle,
+  ArrowDownLeft,
+  ArrowRight,
+  ArrowUpRight,
   CheckCircle2,
   Clock,
   Flame,
-  Info,
+  Layers,
   Plus,
+  RefreshCw,
   Search,
   Sparkles,
+  Ticket,
+  TrendingUp,
   Trophy,
+  Users,
+  Wallet,
   X,
+  Zap,
 } from 'lucide-react';
-import { AccountView } from '@/components/AccountView';
+import { AccountView, type AccountSubTab } from '@/components/AccountView';
 import { AdminDashboard } from '@/components/AdminDashboard';
 import { BetSlip } from '@/components/BetSlip';
 import { CreateMarketModal } from '@/components/CreateMarketModal';
@@ -22,10 +32,11 @@ import { CancelMarketModal, ResolveMarketModal } from '@/components/MarketAction
 import { MarketCard } from '@/components/MarketCard';
 import { ModerationPanel } from '@/components/ModerationPanel';
 import { Header, MobileNav } from '@/components/Navigation';
-import { EmptyState, ErrorBanner } from '@/components/ui';
+import { EmptyState, ErrorBanner, Spinner } from '@/components/ui';
 import { WithdrawModal } from '@/components/WithdrawModal';
+import { useNow } from '@/hooks/useNow';
 import { apiFetch, errorMessage } from '@/lib/api-client';
-import { formatUsdt } from '@/lib/format';
+import { formatShortDate, formatUsdt, timeUntil } from '@/lib/format';
 import type {
   AdminOverview,
   AppTab,
@@ -39,6 +50,7 @@ import type {
 } from '@/lib/types';
 
 type StatusFilter = 'PLAYING' | 'OPEN' | 'CLOSED' | 'RESOLVED' | 'ALL';
+type SortOption = 'POOL' | 'CLOSING_SOON' | 'POPULAR';
 
 interface BetSlipState {
   marketId: string;
@@ -50,6 +62,7 @@ const statusFilters: Array<{ id: StatusFilter; label: string }> = [
   { id: 'OPEN', label: 'Abiertos' },
   { id: 'CLOSED', label: 'En curso' },
   { id: 'RESOLVED', label: 'Finalizados' },
+  { id: 'ALL', label: 'Todos' },
 ];
 
 export function Terminal({
@@ -62,6 +75,7 @@ export function Terminal({
   onLogout: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<AppTab>('EXPLORE');
+  const [accountSubTab, setAccountSubTab] = useState<AccountSubTab>('BETS');
   const [markets, setMarkets] = useState<MarketSummary[]>([]);
   const [bets, setBets] = useState<BetRecord[]>([]);
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
@@ -80,6 +94,7 @@ export function Terminal({
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('TODOS');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('PLAYING');
+  const [sortBy, setSortBy] = useState<SortOption>('POOL');
 
   const [betSlip, setBetSlip] = useState<BetSlipState | null>(null);
   const [placing, setPlacing] = useState(false);
@@ -90,6 +105,7 @@ export function Terminal({
   const [cancelMarket, setCancelMarket] = useState<MarketSummary | null>(null);
 
   const role = profile.role;
+  const now = useNow();
 
   const showToast = useCallback((message: string, type: ToastType = 'success') => {
     const id = Date.now() + Math.floor(Math.random() * 1000);
@@ -232,8 +248,11 @@ export function Terminal({
           ? 'EXPLORE'
           : activeTab;
 
-  const handleNavigate = (tab: AppTab) => {
+  const handleNavigate = (tab: AppTab, subTab?: AccountSubTab) => {
     setActiveTab(tab);
+    if (subTab) {
+      setAccountSubTab(subTab);
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -241,7 +260,7 @@ export function Terminal({
     if (!betSlip) return;
     setPlacing(true);
     try {
-      const response = await apiFetch<{ message: string }>('/api/bets/place', {
+      const response = await apiFetch<{ success: boolean; message: string }>('/api/bets/place', {
         method: 'POST',
         body: JSON.stringify({
           marketId: betSlip.marketId,
@@ -290,18 +309,38 @@ export function Terminal({
       .reduce((sum, b) => sum + (Number.parseFloat(b.amount) || 0), 0);
   }, [bets, betSlip]);
 
-  // Dynamic active categories derived strictly from open/closed markets
-  const activeCategories = useMemo(() => {
-    const set = new Set<string>();
+  const activeBetsList = useMemo(() => {
+    return bets.filter((b) => b.status === 'ACTIVE');
+  }, [bets]);
+
+  // Dynamic active categories derived strictly from open/closed markets with counts
+  const categoryStats = useMemo(() => {
+    const counts: Record<string, number> = {};
     for (const m of markets) {
       if (m.category && (m.status === 'OPEN' || m.status === 'CLOSED')) {
-        set.add(m.category.toUpperCase().trim());
+        const cat = m.category.toUpperCase().trim();
+        counts[cat] = (counts[cat] ?? 0) + 1;
       }
     }
-    return Array.from(set).sort();
+    return counts;
   }, [markets]);
 
-  // Filtered markets
+  const activeCategories = useMemo(() => {
+    return Object.keys(categoryStats).sort();
+  }, [categoryStats]);
+
+  // Evento Destacado (Mayor pozo abierto)
+  const featuredMarket = useMemo(() => {
+    const candidates = markets.filter(
+      (m) => m.status === 'OPEN' && new Date(m.closeTime).getTime() > now
+    );
+    if (candidates.length === 0) return null;
+    return candidates.sort(
+      (a, b) => Number.parseFloat(b.totalPool) - Number.parseFloat(a.totalPool)
+    )[0];
+  }, [markets, now]);
+
+  // Filtered and sorted markets
   const filteredMarkets = useMemo(() => {
     const query = search.trim().toLowerCase();
 
@@ -328,30 +367,36 @@ export function Terminal({
       );
     };
 
-    const statusOrder: Record<MarketSummary['status'], number> = {
-      OPEN: 0,
-      CLOSED: 1,
-      RESOLVED: 2,
-      CANCELLED: 3,
-    };
+    const list = markets.filter(
+      (market) => statusMatch(market) && categoryMatch(market) && searchMatch(market)
+    );
 
-    return markets
-      .filter((market) => statusMatch(market) && categoryMatch(market) && searchMatch(market))
-      .sort((a, b) => {
-        const diff = statusOrder[a.status] - statusOrder[b.status];
-        if (diff !== 0) return diff;
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      });
-  }, [markets, search, statusFilter, categoryFilter]);
+    return list.sort((a, b) => {
+      if (sortBy === 'POOL') {
+        return Number.parseFloat(b.totalPool) - Number.parseFloat(a.totalPool);
+      }
+      if (sortBy === 'CLOSING_SOON') {
+        return new Date(a.closeTime).getTime() - new Date(b.closeTime).getTime();
+      }
+      if (sortBy === 'POPULAR') {
+        return b.betCount - a.betCount;
+      }
+      return 0;
+    });
+  }, [markets, search, statusFilter, categoryFilter, sortBy]);
 
-  const totalLivePool = useMemo(() => {
-    return markets
-      .filter((m) => m.status === 'OPEN' || m.status === 'CLOSED')
-      .reduce((sum, m) => sum + (Number.parseFloat(m.totalPool) || 0), 0);
-  }, [markets]);
+  const playingCount = useMemo(
+    () => markets.filter((m) => m.status === 'OPEN' || m.status === 'CLOSED').length,
+    [markets]
+  );
+  const resolvedCount = useMemo(
+    () => markets.filter((m) => m.status === 'RESOLVED').length,
+    [markets]
+  );
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#090a0f] text-slate-100">
+    <div className="flex min-h-screen flex-col bg-[#07080c] font-sans text-slate-100">
+      {/* Barra de Navegación Superior (Sin pestaña 'Mi Cuenta', con avatar dropdown y saldo) */}
       <Header
         profile={profile}
         activeTab={effectiveTab}
@@ -366,118 +411,450 @@ export function Terminal({
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 pb-24 pt-6 md:pb-12">
         {effectiveTab === 'EXPLORE' ? (
-          <div className="space-y-6">
-            {/* Barra de Filtros y Búsqueda */}
-            <div className="space-y-3">
-              <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
-                <div className="relative flex-1">
-                  <Search className="pointer-events-none absolute left-3.5 top-3 h-4 w-4 text-slate-500" />
-                  <input
-                    type="search"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Buscar evento, opción o creador..."
-                    className="w-full rounded-xl border border-[#212633] bg-[#12151c] py-2.5 pl-10 pr-4 text-xs font-medium text-white placeholder-slate-500 focus:border-[#00f090] focus:outline-none"
-                  />
+          <div className="flex items-start gap-6">
+            {/* ======================================================== */}
+            {/* COLUMNA IZQUIERDA: Rail Deportivo & Categorías (Desktop) */}
+            {/* ======================================================== */}
+            <aside className="hidden xl:flex w-60 shrink-0 flex-col gap-4 sticky top-20 self-start">
+              {/* Navegación rápida de eventos */}
+              <div className="rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-3.5 shadow-sm">
+                <span className="mb-2.5 block text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  Eventos
+                </span>
+                <div className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStatusFilter('ALL');
+                      setCategoryFilter('TODOS');
+                    }}
+                    className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                      statusFilter === 'ALL' && categoryFilter === 'TODOS'
+                        ? 'bg-[#181c26] text-[#00f090] ring-1 ring-[#00f090]/30'
+                        : 'text-slate-300 hover:bg-[#141822] hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Trophy className="h-4 w-4 text-[#00f090]" />
+                      <span>Todos los eventos</span>
+                    </div>
+                    <span className="font-mono text-[10px] text-slate-500">{markets.length}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStatusFilter('PLAYING');
+                      setCategoryFilter('TODOS');
+                    }}
+                    className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                      statusFilter === 'PLAYING' && categoryFilter === 'TODOS'
+                        ? 'bg-[#181c26] text-[#00f090] ring-1 ring-[#00f090]/30'
+                        : 'text-slate-300 hover:bg-[#141822] hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Flame className="h-4 w-4 text-amber-400" />
+                      <span>En juego</span>
+                    </div>
+                    <span className="font-mono text-[10px] text-slate-500">{playingCount}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStatusFilter('RESOLVED');
+                      setCategoryFilter('TODOS');
+                    }}
+                    className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                      statusFilter === 'RESOLVED' && categoryFilter === 'TODOS'
+                        ? 'bg-[#181c26] text-[#00f090] ring-1 ring-[#00f090]/30'
+                        : 'text-slate-300 hover:bg-[#141822] hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-sky-400" />
+                      <span>Finalizados</span>
+                    </div>
+                    <span className="font-mono text-[10px] text-slate-500">{resolvedCount}</span>
+                  </button>
                 </div>
-
-                {/* Filtro de Estado */}
-                <div className="flex rounded-xl border border-[#212633] bg-[#12151c] p-1">
-                  {statusFilters.map((f) => (
-                    <button
-                      key={f.id}
-                      type="button"
-                      onClick={() => setStatusFilter(f.id)}
-                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                        statusFilter === f.id
-                          ? 'bg-[#1e2536] text-white shadow-sm'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
               </div>
 
-              {/* Categorías Dinámicas (Chips) */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                <button
-                  type="button"
-                  onClick={() => setCategoryFilter('TODOS')}
-                  className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
-                    categoryFilter === 'TODOS'
-                      ? 'border-[#00f090] bg-[#00f090]/15 text-[#00f090]'
-                      : 'border-[#212633] bg-[#12151c] text-slate-300 hover:border-slate-500'
-                  }`}
-                >
-                  Todas las categorías
-                </button>
-
-                {activeCategories.map((cat) => {
-                  const active = categoryFilter.toUpperCase() === cat;
-                  return (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setCategoryFilter(cat)}
-                      className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
-                        active
-                          ? 'border-[#00f090] bg-[#00f090]/15 text-[#00f090]'
-                          : 'border-[#212633] bg-[#12151c] text-slate-300 hover:border-slate-500'
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {marketsError ? (
-              <ErrorBanner message={marketsError} onRetry={() => void loadMarkets()} />
-            ) : null}
-
-            {/* Listado de Mercados */}
-            {marketsLoading && markets.length === 0 ? (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {[0, 1, 2, 3, 4, 5].map((i) => (
-                  <div
-                    key={i}
-                    className="h-64 animate-pulse rounded-xl border border-[#212633] bg-[#12151c]"
-                  />
-                ))}
-              </div>
-            ) : filteredMarkets.length === 0 ? (
-              <EmptyState
-                icon={<Trophy className="h-8 w-8 text-slate-600" />}
-                title={markets.length === 0 ? 'No hay eventos disponibles' : 'Sin resultados'}
-                description={
-                  markets.length === 0
-                    ? 'Sé el primero en crear una predicción entre amigos.'
-                    : 'Prueba con otra palabra clave o selecciona otra categoría.'
-                }
-                action={
+              {/* Categorías Dinámicas en uso */}
+              <div className="rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-3.5 shadow-sm">
+                <div className="mb-2.5 flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    Categorías en vivo
+                  </span>
                   <button
                     type="button"
                     onClick={() => setShowCreate(true)}
-                    className="flex items-center gap-2 rounded-lg bg-[#00f090] px-4 py-2 text-xs font-bold text-black transition hover:bg-[#00d681]"
+                    className="text-[10px] font-bold text-[#00f090] hover:underline"
                   >
-                    <Plus className="h-4 w-4" /> Crear evento
+                    + Nueva
                   </button>
-                }
-              />
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {filteredMarkets.map((market) => (
-                  <MarketCard key={market.id} market={market} onSelectOption={openBetSlip} />
-                ))}
+                </div>
+
+                <div className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => setCategoryFilter('TODOS')}
+                    className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                      categoryFilter === 'TODOS'
+                        ? 'bg-[#00f090]/15 text-[#00f090] ring-1 ring-[#00f090]/30'
+                        : 'text-slate-300 hover:bg-[#141822] hover:text-white'
+                    }`}
+                  >
+                    <span>Todas</span>
+                    <span className="font-mono text-[10px] text-slate-500">{playingCount}</span>
+                  </button>
+
+                  {activeCategories.length === 0 ? (
+                    <div className="py-2 text-center text-xs text-slate-500">
+                      Sin categorías activas
+                    </div>
+                  ) : (
+                    activeCategories.map((cat) => {
+                      const isSelected = categoryFilter.toUpperCase() === cat;
+                      const count = categoryStats[cat] ?? 0;
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setCategoryFilter(cat)}
+                          className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                            isSelected
+                              ? 'bg-[#00f090]/15 text-[#00f090] ring-1 ring-[#00f090]/30'
+                              : 'text-slate-300 hover:bg-[#141822] hover:text-white'
+                          }`}
+                        >
+                          <span className="truncate">{cat}</span>
+                          <span className="font-mono text-[10px] text-slate-500">{count}</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
               </div>
-            )}
+
+              {/* Widget Resumen de Billetera & Apuestas */}
+              <div className="rounded-2xl border border-[#1e2330] bg-[#141822]/70 p-4 shadow-sm">
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span>Tu saldo disponible</span>
+                  <Wallet className="h-4 w-4 text-[#00f090]" />
+                </div>
+                <div className="mt-1 font-mono text-lg font-bold text-white">
+                  ${formatUsdt(profile.balance)}{' '}
+                  <span className="text-xs font-normal text-slate-400">USDT</span>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeposit(true)}
+                    className="flex items-center justify-center gap-1 rounded-xl bg-[#00f090] py-2 text-xs font-bold text-slate-950 transition hover:bg-[#00d681]"
+                  >
+                    <ArrowDownLeft className="h-3.5 w-3.5" /> Recargar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowWithdraw(true)}
+                    className="flex items-center justify-center gap-1 rounded-xl border border-[#2d3447] bg-[#1c2230] py-2 text-xs font-bold text-white transition hover:bg-[#252c3e]"
+                  >
+                    <ArrowUpRight className="h-3.5 w-3.5" /> Retirar
+                  </button>
+                </div>
+
+                <div className="mt-3.5 border-t border-[#1e2330] pt-3 text-xs">
+                  <div className="flex items-center justify-between text-slate-400">
+                    <span>Apuestas activas:</span>
+                    <strong className="font-mono text-[#00f090]">{activeBetsList.length}</strong>
+                  </div>
+                  {activeBetsList.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleNavigate('ACCOUNT', 'BETS')}
+                      className="mt-2 w-full text-center text-[11px] font-bold text-[#00f090] hover:underline"
+                    >
+                      Ver mis apuestas en curso →
+                    </button>
+                  )}
+                </div>
+              </div>
+            </aside>
+
+            {/* ======================================================== */}
+            {/* COLUMNA CENTRAL: Feed Principal de Mercados              */}
+            {/* ======================================================== */}
+            <div className="flex-1 min-w-0 space-y-5">
+              {/* Banner: Evento Destacado / Match of the Day (si existe mercado abierto) */}
+              {featuredMarket && !search && categoryFilter === 'TODOS' && (
+                <div className="relative overflow-hidden rounded-3xl border border-[#00f090]/30 bg-gradient-to-br from-[#00f090]/15 via-[#0c0d12] to-[#141822] p-5 sm:p-6 shadow-2xl shadow-[#00f090]/5">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center gap-1 rounded-full bg-[#00f090] px-3 py-1 text-xs font-bold text-slate-950 shadow-md">
+                        <Flame className="h-3.5 w-3.5 fill-current" /> DESTACADO DE HOY
+                      </span>
+                      <span className="rounded-full border border-[#212633] bg-[#141822] px-2.5 py-0.5 text-[11px] font-semibold text-slate-300 uppercase">
+                        {featuredMarket.category}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
+                      <Clock className="h-3.5 w-3.5" />
+                      <span>Cierra en {timeUntil(featuredMarket.closeTime, now)}</span>
+                    </div>
+                  </div>
+
+                  <h2 className="text-xl sm:text-2xl font-black text-white leading-tight">
+                    {featuredMarket.title}
+                  </h2>
+                  {featuredMarket.description && (
+                    <p className="mt-1 text-xs text-slate-400 max-w-xl line-clamp-1">
+                      {featuredMarket.description}
+                    </p>
+                  )}
+
+                  <div className="mt-4 flex items-center gap-4 text-xs text-slate-300">
+                    <div>
+                      <span className="text-slate-500">Pozo Acumulado:</span>{' '}
+                      <strong className="font-mono text-base font-bold text-[#00f090]">
+                        ${formatUsdt(featuredMarket.totalPool)} USDT
+                      </strong>
+                    </div>
+                    <div className="text-slate-500">·</div>
+                    <div className="flex items-center gap-1 text-slate-400">
+                      <Users className="h-3.5 w-3.5 text-slate-500" />
+                      <span>{featuredMarket.betCount} tickets</span>
+                    </div>
+                  </div>
+
+                  {/* Cuotas de apuesta directa del destacado */}
+                  <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
+                    {featuredMarket.options.map((opt) => {
+                      const odds = featuredMarket.odds.optionsOdds[opt];
+                      return (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => openBetSlip(featuredMarket, opt)}
+                          className="flex items-center justify-between rounded-2xl border border-white/10 bg-[#0c0d12]/90 p-3 text-left transition hover:border-[#00f090] hover:bg-[#141822] hover:shadow-lg"
+                        >
+                          <span className="text-xs font-bold text-white truncate pr-2">{opt}</span>
+                          <span className="font-mono text-xs font-bold text-[#00f090] bg-[#00f090]/10 px-2.5 py-1 rounded-xl">
+                            {odds?.multiplier ?? '1.00x'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Barra de Filtros y Búsqueda */}
+              <div className="rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-3 sm:p-4 shadow-sm space-y-3">
+                <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+                  {/* Búsqueda */}
+                  <div className="relative flex-1">
+                    <Search className="pointer-events-none absolute left-3.5 top-3 h-4 w-4 text-slate-500" />
+                    <input
+                      type="search"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Buscar eventos, opciones o creador..."
+                      className="w-full rounded-xl border border-[#212633] bg-[#141822] py-2.5 pl-10 pr-4 text-xs font-medium text-white placeholder-slate-500 focus:border-[#00f090] focus:outline-none"
+                    />
+                    {search && (
+                      <button
+                        type="button"
+                        onClick={() => setSearch('')}
+                        className="absolute right-3 top-3 text-slate-400 hover:text-white"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Filtro de Estado */}
+                  <div className="flex rounded-xl border border-[#212633] bg-[#141822] p-1">
+                    {statusFilters.map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setStatusFilter(f.id)}
+                        className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
+                          statusFilter === f.id
+                            ? 'bg-[#00f090] text-slate-950 shadow-sm'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Ordenamiento */}
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as SortOption)}
+                    className="rounded-xl border border-[#212633] bg-[#141822] px-3 py-2.5 text-xs font-semibold text-slate-200 focus:border-[#00f090] focus:outline-none cursor-pointer"
+                  >
+                    <option value="POOL">Mayor Pozo</option>
+                    <option value="CLOSING_SOON">Cierre Próximo</option>
+                    <option value="POPULAR">Más Apuestas</option>
+                  </select>
+                </div>
+
+                {/* Categorías en Carrusel Horizontal (Visible en tablets y móviles) */}
+                <div className="flex xl:hidden items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                  <button
+                    type="button"
+                    onClick={() => setCategoryFilter('TODOS')}
+                    className={`shrink-0 rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
+                      categoryFilter === 'TODOS'
+                        ? 'border-[#00f090] bg-[#00f090]/15 text-[#00f090]'
+                        : 'border-[#212633] bg-[#141822] text-slate-300 hover:border-slate-500'
+                    }`}
+                  >
+                    Todas ({playingCount})
+                  </button>
+
+                  {activeCategories.map((cat) => {
+                    const isSelected = categoryFilter.toUpperCase() === cat;
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setCategoryFilter(cat)}
+                        className={`shrink-0 rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
+                          isSelected
+                            ? 'border-[#00f090] bg-[#00f090]/15 text-[#00f090]'
+                            : 'border-[#212633] bg-[#141822] text-slate-300 hover:border-slate-500'
+                        }`}
+                      >
+                        {cat} ({categoryStats[cat]})
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {marketsError ? (
+                <ErrorBanner message={marketsError} onRetry={() => void loadMarkets()} />
+              ) : null}
+
+              {/* Grid de Mercados */}
+              {marketsLoading && markets.length === 0 ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {[0, 1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="h-64 animate-pulse rounded-2xl border border-[#212633] bg-[#0c0d12]"
+                    />
+                  ))}
+                </div>
+              ) : filteredMarkets.length === 0 ? (
+                <EmptyState
+                  icon={<Trophy className="h-8 w-8 text-slate-600" />}
+                  title={markets.length === 0 ? 'No hay eventos disponibles' : 'Sin resultados'}
+                  description={
+                    markets.length === 0
+                      ? 'Sé el primero en crear una predicción entre amigos.'
+                      : 'Prueba con otra palabra clave o selecciona otra categoría.'
+                  }
+                  action={
+                    <button
+                      type="button"
+                      onClick={() => setShowCreate(true)}
+                      className="flex items-center gap-2 rounded-xl bg-[#00f090] px-4 py-2 text-xs font-bold text-slate-950 transition hover:bg-[#00d681]"
+                    >
+                      <Plus className="h-4 w-4" /> Crear evento
+                    </button>
+                  }
+                />
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {filteredMarkets.map((market) => (
+                    <MarketCard key={market.id} market={market} onSelectOption={openBetSlip} />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* ======================================================== */}
+            {/* COLUMNA DERECHA: Boleto de Apuestas Docked (Desktop)     */}
+            {/* ======================================================== */}
+            <aside className="hidden lg:block w-80 shrink-0 sticky top-20 self-start space-y-4">
+              {activeSlipMarket && betSlip ? (
+                <BetSlip
+                  key={`${activeSlipMarket.id}:${betSlip.option}`}
+                  market={activeSlipMarket}
+                  option={betSlip.option}
+                  balance={Number.parseFloat(profile.balance) || 0}
+                  placing={placing}
+                  userActiveInMarket={userActiveInMarket}
+                  inline={true}
+                  onClose={() => setBetSlip(null)}
+                  onConfirm={(amount) => void handlePlaceBet(amount)}
+                />
+              ) : (
+                <div className="rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-5 shadow-sm text-center">
+                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#141822] text-[#00f090]">
+                    <Ticket className="h-6 w-6" />
+                  </div>
+                  <h3 className="text-sm font-bold text-white">Boleto de Apuesta</h3>
+                  <p className="mt-1 text-xs text-slate-400 leading-relaxed">
+                    Haz clic en cualquier cuota de los mercados para armar tu boleto de apuesta.
+                  </p>
+                </div>
+              )}
+
+              {/* Tus Apuestas en Juego en la columna derecha */}
+              <div className="rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-4 shadow-sm">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-xs font-bold text-white">Tus Apuestas Activas</span>
+                  <span className="rounded-full bg-[#00f090]/15 px-2 py-0.5 text-[10px] font-bold text-[#00f090]">
+                    {activeBetsList.length}
+                  </span>
+                </div>
+
+                {activeBetsList.length === 0 ? (
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    No tienes apuestas en curso en este momento.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {activeBetsList.slice(0, 3).map((bet) => (
+                      <div
+                        key={bet.id}
+                        className="rounded-xl border border-[#1e2330] bg-[#141822] p-2.5 text-xs space-y-1"
+                      >
+                        <div className="truncate font-semibold text-white">{bet.marketTitle}</div>
+                        <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                          <span>Opción: <strong className="text-white">{bet.selectedOption}</strong></span>
+                          <span className="font-mono text-[#00f090]">${formatUsdt(bet.amount)} USDT</span>
+                        </div>
+                      </div>
+                    ))}
+                    {activeBetsList.length > 3 && (
+                      <button
+                        type="button"
+                        onClick={() => handleNavigate('ACCOUNT', 'BETS')}
+                        className="block w-full text-center text-[11px] font-bold text-[#00f090] hover:underline pt-1"
+                      >
+                        Ver las {activeBetsList.length} apuestas →
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </aside>
           </div>
         ) : null}
 
-        {/* Pestaña: Mi Cuenta (Unificada) */}
+        {/* ======================================================== */}
+        {/* PESTAÑA: Mi Cuenta (Unificada)                          */}
+        {/* ======================================================== */}
         {effectiveTab === 'ACCOUNT' ? (
           <AccountView
             profile={profile}
@@ -485,6 +862,7 @@ export function Terminal({
             transactions={transactions}
             loadingBets={betsLoading}
             loadingWallet={walletLoading}
+            initialSubTab={accountSubTab}
             onRefreshProfile={refreshProfile}
             onDeposit={() => setShowDeposit(true)}
             onWithdraw={() => setShowWithdraw(true)}
@@ -494,7 +872,9 @@ export function Terminal({
           />
         ) : null}
 
-        {/* Pestaña: Moderación */}
+        {/* ======================================================== */}
+        {/* PESTAÑA: Moderación                                      */}
+        {/* ======================================================== */}
         {effectiveTab === 'MODERATION' ? (
           <ModerationPanel
             markets={markets}
@@ -508,7 +888,9 @@ export function Terminal({
           />
         ) : null}
 
-        {/* Pestaña: Finanzas / Admin */}
+        {/* ======================================================== */}
+        {/* PESTAÑA: Finanzas / Admin                                */}
+        {/* ======================================================== */}
         {effectiveTab === 'ADMIN' && role === 'ADMIN' ? (
           <AdminDashboard
             overview={adminOverview}
@@ -530,20 +912,24 @@ export function Terminal({
         role={role}
       />
 
-      {/* Modales y Cupón de Apuesta */}
+      {/* Floating BetSlip para móviles cuando se selecciona una opción */}
       {activeSlipMarket && betSlip ? (
-        <BetSlip
-          key={`${activeSlipMarket.id}:${betSlip.option}`}
-          market={activeSlipMarket}
-          option={betSlip.option}
-          balance={Number.parseFloat(profile.balance) || 0}
-          placing={placing}
-          userActiveInMarket={userActiveInMarket}
-          onClose={() => setBetSlip(null)}
-          onConfirm={(amount) => void handlePlaceBet(amount)}
-        />
+        <div className="lg:hidden">
+          <BetSlip
+            key={`mobile:${activeSlipMarket.id}:${betSlip.option}`}
+            market={activeSlipMarket}
+            option={betSlip.option}
+            balance={Number.parseFloat(profile.balance) || 0}
+            placing={placing}
+            userActiveInMarket={userActiveInMarket}
+            inline={false}
+            onClose={() => setBetSlip(null)}
+            onConfirm={(amount) => void handlePlaceBet(amount)}
+          />
+        </div>
       ) : null}
 
+      {/* Modales */}
       {showCreate ? (
         <CreateMarketModal
           availableCategories={activeCategories}
@@ -591,17 +977,17 @@ export function Terminal({
         />
       ) : null}
 
-      {/* Toast notifications */}
+      {/* Notificaciones flotantes (Toast) */}
       {toasts.length > 0 ? (
         <div className="fixed bottom-20 right-4 z-50 flex max-w-sm flex-col gap-2 sm:bottom-4">
           {toasts.map((toast) => (
             <div
               key={toast.id}
-              className={`flex items-start justify-between gap-3 rounded-xl border p-3.5 text-xs shadow-xl backdrop-blur-md ${
+              className={`flex items-start justify-between gap-3 rounded-2xl border p-3.5 text-xs shadow-2xl backdrop-blur-md ${
                 toast.type === 'success'
-                  ? 'border-emerald-500/40 bg-[#0f1d16] text-emerald-200'
+                  ? 'border-emerald-500/40 bg-[#0c1a13] text-emerald-200'
                   : toast.type === 'warn'
-                    ? 'border-amber-500/40 bg-[#1f190e] text-amber-200'
+                    ? 'border-amber-500/40 bg-[#1c160a] text-amber-200'
                     : 'border-rose-500/40 bg-[#211115] text-rose-200'
               }`}
             >
@@ -613,7 +999,7 @@ export function Terminal({
                 ) : (
                   <X className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
                 )}
-                <span className="font-medium leading-relaxed">{toast.message}</span>
+                <span className="font-semibold leading-relaxed">{toast.message}</span>
               </div>
               <button
                 type="button"

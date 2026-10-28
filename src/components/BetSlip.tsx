@@ -14,6 +14,7 @@ export function BetSlip({
   balance,
   placing,
   userActiveInMarket = 0,
+  inline = false,
   onClose,
   onConfirm,
 }: {
@@ -22,6 +23,7 @@ export function BetSlip({
   balance: number;
   placing: boolean;
   userActiveInMarket?: number;
+  inline?: boolean;
   onClose: () => void;
   onConfirm: (amount: number) => void;
 }) {
@@ -65,37 +67,46 @@ export function BetSlip({
     setAmount(maxVal.toFixed(2));
   };
 
+  const containerClasses = inline
+    ? 'rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-4 shadow-xl'
+    : 'fixed bottom-0 right-0 z-50 w-full border-t border-[#1e2330] bg-[#0c0d12]/95 backdrop-blur-md p-4 shadow-2xl sm:bottom-4 sm:right-4 sm:w-80 sm:rounded-2xl sm:border';
+
   return (
-    <aside className="fixed bottom-0 right-0 z-50 w-full border-t border-[#262c3d] bg-[#12151c] p-4 shadow-2xl md:bottom-4 md:right-4 md:w-80 md:rounded-xl md:border">
-      <div className="mb-3 flex items-center justify-between border-b border-[#1e2330] pb-2">
-        <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
-          Cupón de apuesta
-        </span>
+    <div className={containerClasses}>
+      <div className="mb-3 flex items-center justify-between border-b border-[#1e2330] pb-2.5">
+        <div className="flex items-center gap-2">
+          <span className="flex h-2 w-2 rounded-full bg-[#00f090] animate-pulse" />
+          <span className="text-xs font-bold uppercase tracking-wider text-white">
+            Boleto de Apuesta
+          </span>
+        </div>
         <button
           type="button"
           onClick={onClose}
-          className="rounded p-1 text-slate-400 hover:text-white"
+          className="rounded-lg p-1 text-slate-400 transition hover:bg-[#1a1f2c] hover:text-white"
           aria-label="Cerrar cupón"
         >
           <X className="h-4 w-4" />
         </button>
       </div>
 
-      <div className="mb-1 truncate text-xs text-slate-400">{market.title}</div>
-      <div className="mb-3 flex items-center justify-between rounded-lg border border-[#262c3d] bg-[#0c0d12] p-2.5">
+      <div className="mb-1 truncate text-xs text-slate-400 font-medium">{market.title}</div>
+      <div className="mb-3.5 flex items-center justify-between rounded-xl border border-[#212633] bg-[#141822] p-3">
         <span className="truncate text-sm font-bold text-white">{option}</span>
-        <div className="flex items-center gap-1 text-xs font-bold">
-          <span className="text-slate-400">{currentMultiplier}</span>
-          <ArrowRight className="h-3 w-3 text-slate-600" />
-          <span className="font-mono text-emerald-400">{estimate.multiplier}</span>
+        <div className="flex items-center gap-1.5 text-xs font-bold">
+          <span className="text-slate-400 line-through text-[11px]">{currentMultiplier}</span>
+          <ArrowRight className="h-3 w-3 text-slate-500" />
+          <span className="font-mono text-xs font-bold text-[#00f090] bg-[#00f090]/10 px-2 py-0.5 rounded-md">
+            {estimate.multiplier}
+          </span>
         </div>
       </div>
 
-      <div className="mb-3 space-y-2">
+      <div className="mb-3.5 space-y-2">
         <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
-          <label htmlFor="bet-amount">Monto de apuesta</label>
-          <span className="text-[11px] text-slate-400">
-            Cupo: ${formatUsdt(remainingMarketCap)} USDT
+          <label htmlFor="bet-amount">Monto en USDT</label>
+          <span className="text-[11px] text-slate-500 font-normal">
+            Cupo: ${formatUsdt(remainingMarketCap)}
           </span>
         </div>
 
@@ -109,18 +120,18 @@ export function BetSlip({
             step="0.5"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="w-full rounded-lg border border-[#2d3447] bg-[#0c0d12] px-3 py-2 pr-14 text-sm font-bold text-white focus:border-[#00f090] focus:outline-none"
+            className="w-full rounded-xl border border-[#212633] bg-[#090a0f] px-3.5 py-2.5 pr-14 font-mono text-sm font-bold text-white focus:border-[#00f090] focus:outline-none"
           />
-          <span className="absolute right-3 top-2.5 text-xs font-bold text-slate-400">USDT</span>
+          <span className="absolute right-3.5 top-2.5 text-xs font-bold text-slate-500">USDT</span>
         </div>
 
-        <div className="grid grid-cols-5 gap-1">
+        <div className="grid grid-cols-5 gap-1.5">
           {[1, 5, 10, 25].map((chip) => (
             <button
               key={chip}
               type="button"
               onClick={() => addAmount(chip)}
-              className="rounded-lg border border-[#262c3d] bg-[#161a24] py-1 text-xs font-bold text-slate-300 transition hover:bg-[#1e2330]"
+              className="rounded-lg border border-[#212633] bg-[#141822] py-1 text-xs font-semibold text-slate-300 transition hover:border-slate-500 hover:text-white"
             >
               +${chip}
             </button>
@@ -128,28 +139,28 @@ export function BetSlip({
           <button
             type="button"
             onClick={handleMax}
-            className="rounded-lg border border-[#262c3d] bg-[#161a24] py-1 text-xs font-bold text-emerald-400 transition hover:bg-[#1e2330]"
+            className="rounded-lg border border-[#00f090]/30 bg-[#00f090]/10 py-1 text-xs font-bold text-[#00f090] transition hover:bg-[#00f090]/20"
           >
             MAX
           </button>
         </div>
       </div>
 
-      <div className="mb-3 space-y-1.5 rounded-lg border border-[#1e2330] bg-[#0c0d12] p-2.5 text-xs">
+      <div className="mb-3.5 space-y-1.5 rounded-xl border border-[#1e2330] bg-[#141822]/60 p-3 text-xs">
         <div className="flex justify-between text-slate-400">
-          <span>Ganancia estimada:</span>
+          <span>Ganancia potencial:</span>
           <strong className="font-mono font-bold text-[#00f090]">${estimate.payout} USDT</strong>
         </div>
         <div className="flex justify-between text-[11px] text-slate-500">
-          <span>Beneficio neto:</span>
+          <span>Retorno neto:</span>
           <span className="font-mono text-slate-300">+${estimate.profit} USDT</span>
         </div>
       </div>
 
       {validationError ? (
-        <div className="mb-3 flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-xs font-medium text-amber-400">
+        <div className="mb-3 flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-400">
           <AlertCircle className="h-4 w-4 shrink-0" />
-          {validationError}
+          <span>{validationError}</span>
         </div>
       ) : null}
 
@@ -157,15 +168,15 @@ export function BetSlip({
         type="button"
         onClick={() => onConfirm(amountNumber)}
         disabled={placing || Boolean(validationError)}
-        className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#00f090] py-2.5 text-sm font-bold text-black transition hover:bg-[#00d681] disabled:opacity-50"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#00f090] py-3 text-sm font-bold text-slate-950 transition hover:bg-[#00d681] shadow-lg shadow-[#00f090]/15 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {placing ? <Spinner className="h-4 w-4" /> : <Wallet className="h-4 w-4" />}
-        {placing ? 'Confirmando…' : `Apostar $${validAmount ? amountNumber.toFixed(2) : '0.00'} USDT`}
+        {placing ? <Spinner className="h-4 w-4 text-black" /> : <Wallet className="h-4 w-4 text-black" />}
+        {placing ? 'Colocando apuesta…' : `Apostar $${validAmount ? amountNumber.toFixed(2) : '0.00'} USDT`}
       </button>
 
-      <div className="mt-2 text-center text-[11px] text-slate-500">
-        Saldo en billetera: ${formatUsdt(balance)} USDT
+      <div className="mt-2.5 text-center text-[11px] text-slate-500">
+        Saldo disponible: ${formatUsdt(balance)} USDT
       </div>
-    </aside>
+    </div>
   );
 }

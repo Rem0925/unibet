@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -29,6 +29,7 @@ interface AccountViewProps {
   transactions: TransactionRecord[];
   loadingBets: boolean;
   loadingWallet: boolean;
+  initialSubTab?: AccountSubTab;
   onRefreshProfile: () => Promise<UserProfile>;
   onDeposit: () => void;
   onWithdraw: () => void;
@@ -37,7 +38,7 @@ interface AccountViewProps {
   onExplore: () => void;
 }
 
-type AccountSubTab = 'BETS' | 'TRANSACTIONS' | 'SETTINGS';
+export type AccountSubTab = 'BETS' | 'TRANSACTIONS' | 'SETTINGS';
 
 const betStatusBadge: Record<BetStatus, { label: string; style: string }> = {
   ACTIVE: { label: 'EN JUEGO', style: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' },
@@ -64,6 +65,7 @@ export function AccountView({
   transactions,
   loadingBets,
   loadingWallet,
+  initialSubTab = 'BETS',
   onRefreshProfile,
   onDeposit,
   onWithdraw,
@@ -71,7 +73,13 @@ export function AccountView({
   showToast,
   onExplore,
 }: AccountViewProps) {
-  const [activeSubTab, setActiveSubTab] = useState<AccountSubTab>('BETS');
+  const [activeSubTab, setActiveSubTab] = useState<AccountSubTab>(initialSubTab);
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setActiveSubTab(initialSubTab);
+    }
+  }, [initialSubTab]);
   const [betFilter, setBetFilter] = useState<'ALL' | BetStatus>('ALL');
   const [txFilter, setTxFilter] = useState<'ALL' | 'DEPOSIT' | 'WITHDRAW' | 'WINS'>('ALL');
 
