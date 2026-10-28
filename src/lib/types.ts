@@ -164,10 +164,24 @@ export interface TransactionsResponse {
 export interface DepositOrderResponse {
   success: true;
   tradeNo: string;
+  adminPayId?: string | null;
+  amount?: number;
+  userBinanceUid?: string | null;
   checkoutUrl: string | null;
   qrcodeLink: string | null;
   universalUrl: string | null;
   expireTime: number | null;
+}
+
+export interface BscFeeResponse {
+  coin: string;
+  network: string;
+  withdrawFee: number;
+  withdrawMin: number;
+  withdrawMax: number;
+  withdrawEnable: boolean;
+  isLive: boolean;
+  cachedAt: number;
 }
 
 export interface WithdrawResponse {
@@ -175,6 +189,10 @@ export interface WithdrawResponse {
   status: 'COMPLETED' | 'PENDING';
   message: string;
   remainingBalance: string;
+  method?: 'BINANCE_PAY' | 'BEP20';
+  payoutAmount?: string;
+  networkFee?: string;
+  binanceWithdrawId?: string | null;
 }
 
 export type ToastType = 'success' | 'warn' | 'error';

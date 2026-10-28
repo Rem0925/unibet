@@ -430,47 +430,20 @@ BEGIN
         RAISE EXCEPTION 'El monto del webhook no coincide con la orden';
     END IF;
 
-    v_admin_id := public.fn_house_admin_id();
-
-    IF v_admin_id IS NULL THEN
-        v_fee_amount := 0;
-    ELSE
-        v_fee_amount := ROUND(p_gross_amount * 0.015, 2);
-    END IF;
-
-    v_net_amount := p_gross_amount - v_fee_amount;
+    v_fee_amount := 0;
+    v_net_amount := p_gross_amount;
 
     UPDATE public.transactions
     SET status = 'COMPLETED',
         amount = v_net_amount,
-        metadata = jsonb_build_object(
+        metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object(
             'gross_amount', p_gross_amount,
             'fee_amount', v_fee_amount,
-            'net_amount', v_net_amount
+            'net_amount', v_net_amount,
+            'credited_at', timezone('utc'::text, now())
         ),
         updated_at = timezone('utc'::text, now())
     WHERE id = v_tx.id;
-
-    IF v_fee_amount > 0 AND v_admin_id IS NOT NULL THEN
-        UPDATE public.users
-        SET balance = balance + v_fee_amount,
-            updated_at = timezone('utc'::text, now())
-        WHERE id = v_admin_id;
-
-        INSERT INTO public.transactions (user_id, type, amount, status, metadata)
-        VALUES (
-            v_admin_id,
-            'FEE_DEPOSIT',
-            v_fee_amount,
-            'COMPLETED',
-            jsonb_build_object(
-                'deposit_tx_id', v_tx.id,
-                'source_user_id', p_user_id,
-                'gross_amount', p_gross_amount,
-                'fee_rate', 0.015
-            )
-        );
-    END IF;
 
     UPDATE public.users
     SET balance = balance + v_net_amount,
@@ -1016,12 +989,14 @@ END;
 $$;
 
 DROP FUNCTION IF EXISTS public.fn_start_withdrawal(UUID, NUMERIC, TEXT, TEXT);
+DROP FUNCTION IF EXISTS public.fn_start_withdrawal(UUID, NUMERIC, TEXT, TEXT, TEXT);
 
 CREATE OR REPLACE FUNCTION public.fn_start_withdrawal(
     p_user_id UUID,
     p_amount NUMERIC(18, 4),
-    p_binance_uid TEXT,
-    p_request_id TEXT
+    p_destination TEXT,
+    p_request_id TEXT,
+    p_method TEXT DEFAULT 'BINANCE_PAY'
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -1032,13 +1007,22 @@ DECLARE
     v_user RECORD;
     v_existing RECORD;
     v_new_balance NUMERIC(18, 4);
+    v_method TEXT := UPPER(COALESCE(p_method, 'BINANCE_PAY'));
 BEGIN
     IF p_amount IS NULL OR p_amount < 1.0000 OR p_amount > 200.0000 THEN
         RAISE EXCEPTION 'El retiro debe estar entre 1.00 y 200.00 USDT';
     END IF;
 
-    IF p_binance_uid IS NULL OR p_binance_uid !~ '^[0-9]{8,10}$' THEN
-        RAISE EXCEPTION 'Binance UID inválido';
+    IF v_method = 'BINANCE_PAY' THEN
+        IF p_destination IS NULL OR p_destination !~ '^[0-9]{8,10}$' THEN
+            RAISE EXCEPTION 'Binance UID inválido (debe contener entre 8 y 10 dígitos)';
+        END IF;
+    ELSIF v_method = 'BEP20' THEN
+        IF p_destination IS NULL OR p_destination !~ '^0x[a-fA-F0-9]{40}$' THEN
+            RAISE EXCEPTION 'Dirección BEP-20 inválida (debe ser formato 0x de 42 caracteres)';
+        END IF;
+    ELSE
+        RAISE EXCEPTION 'Método de retiro inválido';
     END IF;
 
     IF p_request_id IS NULL OR char_length(trim(p_request_id)) < 6 THEN
@@ -1082,7 +1066,7 @@ BEGIN
 
     UPDATE public.users
     SET balance = balance - p_amount,
-        binance_uid = p_binance_uid,
+        binance_uid = CASE WHEN v_method = 'BINANCE_PAY' THEN p_destination ELSE binance_uid END,
         updated_at = timezone('utc'::text, now())
     WHERE id = p_user_id;
 
@@ -1096,7 +1080,10 @@ BEGIN
         'PENDING',
         p_request_id,
         jsonb_build_object(
-            'binance_uid', p_binance_uid,
+            'method', v_method,
+            'destination', p_destination,
+            'binance_uid', CASE WHEN v_method = 'BINANCE_PAY' THEN p_destination ELSE NULL END,
+            'bep20_address', CASE WHEN v_method = 'BEP20' THEN p_destination ELSE NULL END,
             'request_id', p_request_id,
             'disbursed_at', null
         )
@@ -1422,7 +1409,7 @@ REVOKE ALL ON FUNCTION public.fn_resolve_market(UUID, TEXT, UUID) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_house_admin_id() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_close_market(UUID, UUID) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_cancel_market(UUID, UUID, TEXT) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.fn_start_withdrawal(UUID, NUMERIC, TEXT, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.fn_start_withdrawal(UUID, NUMERIC, TEXT, TEXT, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_refund_withdrawal(UUID, NUMERIC, TEXT, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_admin_update_user(UUID, UUID, TEXT, BOOLEAN) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_admin_overview(UUID) FROM PUBLIC;
@@ -1434,7 +1421,7 @@ REVOKE ALL ON FUNCTION public.fn_resolve_market(UUID, TEXT, UUID) FROM anon, aut
 REVOKE ALL ON FUNCTION public.fn_house_admin_id() FROM anon, authenticated;
 REVOKE ALL ON FUNCTION public.fn_close_market(UUID, UUID) FROM anon, authenticated;
 REVOKE ALL ON FUNCTION public.fn_cancel_market(UUID, UUID, TEXT) FROM anon, authenticated;
-REVOKE ALL ON FUNCTION public.fn_start_withdrawal(UUID, NUMERIC, TEXT, TEXT) FROM anon, authenticated;
+REVOKE ALL ON FUNCTION public.fn_start_withdrawal(UUID, NUMERIC, TEXT, TEXT, TEXT) FROM anon, authenticated;
 REVOKE ALL ON FUNCTION public.fn_refund_withdrawal(UUID, NUMERIC, TEXT, TEXT) FROM anon, authenticated;
 REVOKE ALL ON FUNCTION public.fn_admin_update_user(UUID, UUID, TEXT, BOOLEAN) FROM anon, authenticated;
 REVOKE ALL ON FUNCTION public.fn_admin_overview(UUID) FROM anon, authenticated;
@@ -1445,7 +1432,7 @@ GRANT EXECUTE ON FUNCTION public.fn_place_bet(UUID, UUID, TEXT, NUMERIC) TO serv
 GRANT EXECUTE ON FUNCTION public.fn_resolve_market(UUID, TEXT, UUID) TO service_role;
 GRANT EXECUTE ON FUNCTION public.fn_close_market(UUID, UUID) TO service_role;
 GRANT EXECUTE ON FUNCTION public.fn_cancel_market(UUID, UUID, TEXT) TO service_role;
-GRANT EXECUTE ON FUNCTION public.fn_start_withdrawal(UUID, NUMERIC, TEXT, TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION public.fn_start_withdrawal(UUID, NUMERIC, TEXT, TEXT, TEXT) TO service_role;
 GRANT EXECUTE ON FUNCTION public.fn_refund_withdrawal(UUID, NUMERIC, TEXT, TEXT) TO service_role;
 GRANT EXECUTE ON FUNCTION public.fn_admin_update_user(UUID, UUID, TEXT, BOOLEAN) TO service_role;
 GRANT EXECUTE ON FUNCTION public.fn_admin_overview(UUID) TO service_role;

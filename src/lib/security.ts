@@ -110,14 +110,39 @@ export const WithdrawSchema = z
     }).max(WITHDRAW_MAX, {
       message: `Límite de seguridad por retiro: ${WITHDRAW_MAX.toFixed(2)} USDT`,
     }),
+    method: z.enum(['BINANCE_PAY', 'BEP20']).default('BINANCE_PAY'),
     binanceUid: z
       .string()
       .trim()
       .regex(/^[0-9]{8,10}$/, {
         message: 'El Binance UID debe contener entre 8 y 10 dígitos numéricos',
-      }),
+      })
+      .optional(),
+    address: z
+      .string()
+      .trim()
+      .regex(/^0x[a-fA-F0-9]{40}$/, {
+        message: 'Dirección BEP-20 (BSC) inválida (debe empezar con 0x y tener 42 caracteres)',
+      })
+      .optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((data, ctx) => {
+    if (data.method === 'BINANCE_PAY' && !data.binanceUid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['binanceUid'],
+        message: 'Debes proporcionar un Binance UID válido para retiros por Binance Pay',
+      });
+    }
+    if (data.method === 'BEP20' && !data.address) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['address'],
+        message: 'Debes proporcionar una dirección BSC (BEP-20) válida',
+      });
+    }
+  });
 
 export const DepositSchema = z
   .object({
@@ -126,6 +151,31 @@ export const DepositSchema = z
     }).max(DEPOSIT_MAX, {
       message: `Depósito máximo por transacción: ${DEPOSIT_MAX.toFixed(2)} USDT`,
     }),
+    binanceUid: z
+      .string()
+      .trim()
+      .regex(/^[0-9]{8,10}$/, {
+        message: 'El Binance UID debe contener entre 8 y 10 dígitos numéricos',
+      })
+      .optional(),
+  })
+  .strict();
+
+export const VerifyDepositSchema = z
+  .object({
+    tradeNo: z
+      .string()
+      .trim()
+      .min(6)
+      .max(64)
+      .regex(/^[A-Za-z0-9_-]+$/, { message: 'Referencia de depósito inválida' }),
+    binanceUid: z
+      .string()
+      .trim()
+      .regex(/^[0-9]{8,10}$/, {
+        message: 'El Binance UID debe contener entre 8 y 10 dígitos numéricos',
+      })
+      .optional(),
   })
   .strict();
 
@@ -204,3 +254,4 @@ export type CancelMarketInput = z.infer<typeof CancelMarketSchema>;
 export type AdminUpdateUserInput = z.infer<typeof AdminUpdateUserSchema>;
 export type ReconcileWithdrawalInput = z.infer<typeof ReconcileWithdrawalSchema>;
 export type ReconcileDepositInput = z.infer<typeof ReconcileDepositSchema>;
+export type VerifyDepositInput = z.infer<typeof VerifyDepositSchema>;

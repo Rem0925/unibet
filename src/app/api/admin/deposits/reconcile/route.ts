@@ -1,9 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { queryBinanceDepositOrder } from '@/lib/binance';
+import { fetchBinancePayTransactions, isBinanceConfigured } from '@/lib/binance';
 import { ReconcileDepositSchema } from '@/lib/security';
 import { logAudit } from '@/lib/server/audit';
 import { requireRole } from '@/lib/server/auth';
 import { ApiError, jsonError, parseBody } from '@/lib/server/http';
+import { metadataRecord } from '@/lib/server/mappers';
 import { enforceRateLimit } from '@/lib/server/rate-limit';
 import { throwRpcError } from '@/lib/server/rpc';
 import { getServiceSupabase } from '@/lib/server/supabase';
@@ -15,9 +16,8 @@ interface DepositRow {
   status: string;
   reference_id: string;
   metadata: unknown;
+  created_at: string;
 }
-
-const FAILED_ORDER_STATES = new Set(['PAY_FAIL', 'PAY_CLOSED', 'PAY_OVER_TIME', 'PAY_TIMEOUT']);
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
 
     const { data: txData, error: txError } = await supabase
       .from('transactions')
-      .select('id, user_id, amount, status, reference_id, metadata')
+      .select('id, user_id, amount, status, reference_id, metadata, created_at')
       .eq('reference_id', referenceId)
       .eq('type', 'DEPOSIT')
       .maybeSingle();
@@ -71,84 +71,73 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    let order;
-    try {
-      order = await queryBinanceDepositOrder(referenceId);
-    } catch (binanceError) {
-      const message =
-        binanceError instanceof Error ? binanceError.message : 'Error consultando Binance';
-      throw new ApiError(
-        `Binance Pay no confirmó esta orden: ${message}`,
-        502,
-        'BINANCE_QUERY_FAILED'
-      );
-    }
+    // Acción: verify
+    const orderAmount = Number(tx.amount);
+    let binanceTxId: string | null = null;
+    let verifiedAmount = orderAmount;
 
-    if (order.currency !== null && order.currency !== 'USDT') {
-      throw new ApiError(
-        `La orden está en ${order.currency}; solo se procesan depósitos en USDT.`,
-        409,
-        'DEPOSIT_CURRENCY_MISMATCH'
-      );
-    }
+    if (isBinanceConfigured()) {
+      try {
+        const orderCreatedAt = new Date(tx.created_at).getTime();
+        const transactions = await fetchBinancePayTransactions({
+          startTime: Math.max(0, orderCreatedAt - 15 * 60 * 1000),
+          limit: 100,
+        });
 
-    if (order.status === 'PAY_SUCCESS' && order.totalFee !== null) {
-      const { error: creditError } = await supabase.rpc('fn_credit_deposit', {
-        p_user_id: tx.user_id,
-        p_gross_amount: order.totalFee,
-        p_reference_id: referenceId,
-      });
+        const metadata = metadataRecord(tx.metadata);
+        const userUid = typeof metadata.payer_binance_uid === 'string' ? metadata.payer_binance_uid : null;
 
-      if (creditError) {
-        throwRpcError(creditError, 'Binance confirma el pago pero la acreditación falló');
+        const match = transactions.find((item) => {
+          if (item.orderType !== 'C2C' || item.currency !== 'USDT') return false;
+          const txAmt = Number.parseFloat(item.amount);
+          if (!Number.isFinite(txAmt) || Math.abs(txAmt - orderAmount) > 0.05) return false;
+          if (userUid && item.payerInfo?.binanceId && item.payerInfo.binanceId !== userUid) return false;
+          return true;
+        });
+
+        if (match) {
+          binanceTxId = match.transactionId;
+          verifiedAmount = Number.parseFloat(match.amount);
+        }
+      } catch (err) {
+        console.warn('[admin] No se pudo verificar con Binance SAPI, continuando con conciliación manual:', err);
       }
-
-      await logAudit({
-        actorId: profile.id,
-        action: 'DEPOSIT_CREDITED_MANUALLY',
-        targetUserId: tx.user_id,
-        metadata: { referenceId, totalFee: order.totalFee, binanceStatus: order.status },
-      });
-
-      return NextResponse.json({
-        success: true,
-        message: `Pago confirmado por Binance. Depósito acreditado (${order.totalFee} USDT brutos, menos la comisión del 1.5%).`,
-      });
     }
 
-    if (order.status && FAILED_ORDER_STATES.has(order.status)) {
-      const { error: failError } = await supabase.rpc('fn_fail_deposit', {
-        p_reference_id: referenceId,
-        p_reason: `Binance reporta ${order.status}: la orden se cerró sin pago`,
-      });
+    const { error: creditError } = await supabase.rpc('fn_credit_deposit', {
+      p_user_id: tx.user_id,
+      p_gross_amount: verifiedAmount,
+      p_reference_id: referenceId,
+    });
 
-      if (failError) {
-        throwRpcError(failError, 'No se pudo cerrar el depósito');
-      }
-
-      await logAudit({
-        actorId: profile.id,
-        action: 'DEPOSIT_MARKED_FAILED',
-        targetUserId: tx.user_id,
-        metadata: { referenceId, binanceStatus: order.status },
-      });
-
-      return NextResponse.json({
-        success: true,
-        message: `Binance reporta ${order.status}: depósito cerrado sin acreditar.`,
-      });
+    if (creditError) {
+      throwRpcError(creditError, 'Fallo al acreditar el depósito en la base de datos');
     }
+
+    const metadata = metadataRecord(tx.metadata);
+    await supabase
+      .from('transactions')
+      .update({
+        metadata: {
+          ...metadata,
+          binance_pay_tx_id: binanceTxId,
+          reconciled_by: profile.id,
+          reconciled_at: new Date().toISOString(),
+          reconciliation_note: note ?? null,
+        },
+      })
+      .eq('id', tx.id);
 
     await logAudit({
       actorId: profile.id,
-      action: 'DEPOSIT_CHECKED_PENDING',
+      action: 'DEPOSIT_CREDITED_MANUALLY',
       targetUserId: tx.user_id,
-      metadata: { referenceId, binanceStatus: order.status, checkedAt: new Date().toISOString() },
+      metadata: { referenceId, amount: verifiedAmount, note, binanceTxId },
     });
 
     return NextResponse.json({
       success: true,
-      message: `Binance reporta estado "${order.status ?? 'desconocido'}". La orden sigue en proceso; vuelve a verificar más tarde.`,
+      message: `Depósito acreditado con éxito (${verifiedAmount.toFixed(2)} USDT acreditados al usuario sin comisiones).`,
     });
   } catch (error) {
     return jsonError(error);

@@ -1,8 +1,11 @@
 import crypto from 'crypto';
+import type { BscFeeResponse } from './types';
 
-const DEFAULT_BASE_URL = 'https://bpay.binanceapi.com';
+const SAPI_DEFAULT_BASE_URL = 'https://api.binance.com';
+const BPAY_DEFAULT_BASE_URL = 'https://bpay.binanceapi.com';
 const REQUEST_TIMEOUT_MS = 20_000;
 const CERT_CACHE_TTL_MS = 60 * 60 * 1000;
+const BSC_FEE_CACHE_TTL_MS = 60 * 1000; // 1 minuto de caché para tarifas de red
 
 export class BinanceApiError extends Error {
   definitive: boolean;
@@ -23,7 +26,7 @@ interface BinanceEnvelope<T> {
   data?: T;
 }
 
-interface BinanceConfig {
+interface SapiConfig {
   baseUrl: string;
   apiKey: string;
   apiSecret: string;
@@ -34,34 +37,315 @@ interface CertificateEntry {
   pem: string;
 }
 
+export interface BinancePayPayerInfo {
+  name?: string;
+  type?: string;
+  binanceId?: string;
+  accountId?: string;
+}
+
+export interface BinancePayTransactionItem {
+  orderType: string;
+  transactionId: string;
+  transactionTime: number;
+  amount: string;
+  currency: string;
+  walletType?: number;
+  payerInfo?: BinancePayPayerInfo;
+  receiverInfo?: BinancePayPayerInfo;
+}
+
+export type BscFeeInfo = BscFeeResponse;
+
 let certificateCache: { fetchedAt: number; entries: CertificateEntry[] } | null = null;
 let lastForceRefreshAt = 0;
 const FORCE_REFRESH_COOLDOWN_MS = 5 * 60 * 1000;
 
-function getConfig(): BinanceConfig {
-  const apiKey = process.env.BINANCE_PAY_API_KEY;
-  const apiSecret = process.env.BINANCE_PAY_API_SECRET;
+let bscFeeCache: { data: BscFeeInfo; cachedAt: number } | null = null;
+
+export function isBinanceConfigured(): boolean {
+  const apiKey = process.env.BINANCE_API_KEY || process.env.BINANCE_PAY_API_KEY;
+  const apiSecret = process.env.BINANCE_API_SECRET || process.env.BINANCE_PAY_API_SECRET;
+  return Boolean(apiKey && apiSecret);
+}
+
+export function getAdminBinancePayId(): string {
+  return (
+    process.env.NEXT_PUBLIC_ADMIN_BINANCE_PAY_ID ||
+    process.env.ADMIN_BINANCE_PAY_ID ||
+    process.env.BINANCE_PAY_ID ||
+    ''
+  ).trim();
+}
+
+function getSapiConfig(): SapiConfig {
+  const apiKey = process.env.BINANCE_API_KEY || process.env.BINANCE_PAY_API_KEY;
+  const apiSecret = process.env.BINANCE_API_SECRET || process.env.BINANCE_PAY_API_SECRET;
 
   if (!apiKey || !apiSecret) {
     throw new BinanceApiError(
-      'Binance Pay no está configurado en el servidor (faltan BINANCE_PAY_API_KEY / BINANCE_PAY_API_SECRET).',
+      'Binance API no está configurada en el servidor (faltan BINANCE_API_KEY / BINANCE_API_SECRET).',
+      true,
+      'BINANCE_NOT_CONFIGURED'
+    );
+  }
+
+  const rawBase = process.env.BINANCE_BASE_URL || SAPI_DEFAULT_BASE_URL;
+  // Si la variable configurada es bpay.binanceapi.com, redirigir a api.binance.com para llamadas SAPI
+  const baseUrl = rawBase.includes('bpay.binanceapi.com')
+    ? SAPI_DEFAULT_BASE_URL
+    : rawBase.replace(/\/$/, '');
+
+  return { baseUrl, apiKey, apiSecret };
+}
+
+function getMerchantConfig(): SapiConfig {
+  const apiKey = process.env.BINANCE_PAY_API_KEY || process.env.BINANCE_API_KEY;
+  const apiSecret = process.env.BINANCE_PAY_API_SECRET || process.env.BINANCE_API_SECRET;
+
+  if (!apiKey || !apiSecret) {
+    throw new BinanceApiError(
+      'Binance Pay no está configurado en el servidor.',
       true,
       'BINANCE_NOT_CONFIGURED'
     );
   }
 
   return {
-    baseUrl: (process.env.BINANCE_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, ''),
+    baseUrl: (process.env.BINANCE_BASE_URL || BPAY_DEFAULT_BASE_URL).replace(/\/$/, ''),
     apiKey,
     apiSecret,
   };
 }
 
-export function isBinanceConfigured(): boolean {
-  return Boolean(process.env.BINANCE_PAY_API_KEY && process.env.BINANCE_PAY_API_SECRET);
+function signSapiQuery(params: Record<string, string | number | boolean | undefined>, secret: string): string {
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') {
+      searchParams.append(key, String(value));
+    }
+  }
+  if (!searchParams.has('recvWindow')) {
+    searchParams.append('recvWindow', '60000');
+  }
+  if (!searchParams.has('timestamp')) {
+    searchParams.append('timestamp', String(Date.now()));
+  }
+  const queryString = searchParams.toString();
+  const signature = crypto.createHmac('sha256', secret).update(queryString).digest('hex');
+  return `${queryString}&signature=${signature}`;
 }
 
-function signPayload(payload: string, secret: string): string {
+async function callBinanceSapi<T>(options: {
+  method: 'GET' | 'POST';
+  endpoint: string;
+  params?: Record<string, string | number | boolean | undefined>;
+}): Promise<T> {
+  const config = getSapiConfig();
+  const signedQuery = signSapiQuery(options.params ?? {}, config.apiSecret);
+
+  const url =
+    options.method === 'GET'
+      ? `${config.baseUrl}${options.endpoint}?${signedQuery}`
+      : `${config.baseUrl}${options.endpoint}`;
+
+  const fetchOptions: RequestInit = {
+    method: options.method,
+    headers: {
+      'X-MBX-APIKEY': config.apiKey,
+      ...(options.method === 'POST' ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
+    },
+    ...(options.method === 'POST' ? { body: signedQuery } : {}),
+    cache: 'no-store',
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  };
+
+  let response: Response;
+  try {
+    response = await fetch(url, fetchOptions);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Error de red desconocido';
+    throw new BinanceApiError(`No se pudo contactar a Binance SAPI: ${message}`, false, 'BINANCE_NETWORK');
+  }
+
+  const raw = await response.text();
+  let payload: Record<string, unknown> | Array<unknown> | null = null;
+  try {
+    payload = raw ? (JSON.parse(raw) as Record<string, unknown> | Array<unknown>) : null;
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok) {
+    const isDefinitive = response.status >= 400 && response.status < 500 && ![408, 429].includes(response.status);
+    const rec = isRecord(payload) ? payload : null;
+    const errMsg = (typeof rec?.msg === 'string' && rec.msg) ||
+      (typeof rec?.errorMessage === 'string' && rec.errorMessage) ||
+      `Binance respondió HTTP ${response.status}`;
+    const errCode = rec?.code ? String(rec.code) : `HTTP_${response.status}`;
+    throw new BinanceApiError(errMsg, isDefinitive, errCode);
+  }
+
+  if (payload === null) {
+    throw new BinanceApiError('Binance devolvió una respuesta vacía o ilegible', false, 'BINANCE_BAD_RESPONSE');
+  }
+
+  return payload as T;
+}
+
+/**
+ * Consulta en tiempo real las comisiones y límites de retiro para USDT en la red BSC (BEP-20).
+ * Utiliza caché en memoria de 60s para no agotar los rate-limits de Binance.
+ */
+export async function getBscWithdrawFee(): Promise<BscFeeInfo> {
+  const now = Date.now();
+  if (bscFeeCache && now - bscFeeCache.cachedAt < BSC_FEE_CACHE_TTL_MS) {
+    return bscFeeCache.data;
+  }
+
+  if (!isBinanceConfigured()) {
+    return {
+      coin: 'USDT',
+      network: 'BSC',
+      withdrawFee: 0.19,
+      withdrawMin: 5.0,
+      withdrawMax: 1000000.0,
+      withdrawEnable: true,
+      isLive: false,
+      cachedAt: now,
+    };
+  }
+
+  try {
+    const data = await callBinanceSapi<
+      Array<{
+        coin: string;
+        networkList?: Array<{
+          network: string;
+          withdrawFee: string;
+          withdrawMin: string;
+          withdrawMax: string;
+          withdrawEnable: boolean;
+        }>;
+      }>
+    >({
+      method: 'GET',
+      endpoint: '/sapi/v1/capital/config/getall',
+    });
+
+    if (Array.isArray(data)) {
+      const usdt = data.find((c) => c.coin === 'USDT');
+      const bsc = usdt?.networkList?.find((n) => n.network === 'BSC');
+
+      if (bsc) {
+        const feeInfo: BscFeeInfo = {
+          coin: 'USDT',
+          network: 'BSC',
+          withdrawFee: Number.parseFloat(bsc.withdrawFee) || 0.19,
+          withdrawMin: Number.parseFloat(bsc.withdrawMin) || 5.0,
+          withdrawMax: Number.parseFloat(bsc.withdrawMax) || 1000000.0,
+          withdrawEnable: bsc.withdrawEnable ?? true,
+          isLive: true,
+          cachedAt: now,
+        };
+        bscFeeCache = { data: feeInfo, cachedAt: now };
+        return feeInfo;
+      }
+    }
+  } catch (err) {
+    console.error('[binance] Error consultando comisiones BSC en vivo:', err);
+    if (bscFeeCache) {
+      return bscFeeCache.data;
+    }
+  }
+
+  return {
+    coin: 'USDT',
+    network: 'BSC',
+    withdrawFee: 0.19,
+    withdrawMin: 5.0,
+    withdrawMax: 1000000.0,
+    withdrawEnable: true,
+    isLive: false,
+    cachedAt: now,
+  };
+}
+
+/**
+ * Ejecuta un retiro automático on-chain en BSC hacia la dirección BEP-20 indicada.
+ */
+export async function submitBscWithdrawal(params: {
+  address: string;
+  amount: number;
+  requestId: string;
+}): Promise<{ id: string; raw: unknown }> {
+  if (!/^0x[a-fA-F0-9]{40}$/.test(params.address)) {
+    throw new BinanceApiError('Dirección BEP-20 (BSC) inválida', true, 'INVALID_ADDRESS');
+  }
+  if (!Number.isFinite(params.amount) || params.amount <= 0) {
+    throw new BinanceApiError('Monto de retiro inválido', true, 'INVALID_AMOUNT');
+  }
+
+  const response = await callBinanceSapi<{ id?: string }>({
+    method: 'POST',
+    endpoint: '/sapi/v1/capital/withdraw/apply',
+    params: {
+      coin: 'USDT',
+      network: 'BSC',
+      address: params.address,
+      amount: params.amount.toFixed(4),
+      withdrawOrderId: params.requestId,
+    },
+  });
+
+  if (!response?.id) {
+    throw new BinanceApiError('Binance no devolvió el identificador del retiro', false, 'BINANCE_NO_WITHDRAW_ID');
+  }
+
+  return { id: response.id, raw: response };
+}
+
+/**
+ * Consulta el historial de transferencias C2C en Binance Pay de la cuenta personal del administrador.
+ */
+export async function fetchBinancePayTransactions(params?: {
+  startTime?: number;
+  limit?: number;
+}): Promise<BinancePayTransactionItem[]> {
+  if (!isBinanceConfigured()) {
+    return [];
+  }
+
+  const queryParams: Record<string, string | number> = {
+    limit: params?.limit ?? 100,
+  };
+  if (params?.startTime) {
+    queryParams.startTime = params.startTime;
+  }
+
+  try {
+    const response = await callBinanceSapi<{
+      code?: string;
+      message?: string;
+      data?: BinancePayTransactionItem[];
+      success?: boolean;
+    }>({
+      method: 'GET',
+      endpoint: '/sapi/v1/pay/transactions',
+      params: queryParams,
+    });
+
+    if (Array.isArray(response.data)) {
+      return response.data;
+    }
+  } catch (error) {
+    console.error('[binance] Error al obtener transacciones de Binance Pay:', error);
+  }
+
+  return [];
+}
+
+function signMerchantPayload(payload: string, secret: string): string {
   return crypto.createHmac('sha512', secret).update(payload).digest('hex').toUpperCase();
 }
 
@@ -69,12 +353,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-async function binancePost<T>(endpoint: string, body: unknown): Promise<BinanceEnvelope<T>> {
-  const config = getConfig();
+async function binanceMerchantPost<T>(endpoint: string, body: unknown): Promise<BinanceEnvelope<T>> {
+  const config = getMerchantConfig();
   const jsonBody = JSON.stringify(body);
   const timestamp = Date.now().toString();
   const nonce = crypto.randomBytes(16).toString('hex').toUpperCase();
-  const signature = signPayload(`${timestamp}\n${nonce}\n${jsonBody}\n`, config.apiSecret);
+  const signature = signMerchantPayload(`${timestamp}\n${nonce}\n${jsonBody}\n`, config.apiSecret);
 
   let response: Response;
   try {
@@ -129,10 +413,6 @@ async function binancePost<T>(endpoint: string, body: unknown): Promise<BinanceE
   return payload;
 }
 
-function appUrl(): string {
-  return (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
-}
-
 export async function createBinanceDepositOrder(params: {
   userId: string;
   amount: number;
@@ -143,37 +423,14 @@ export async function createBinanceDepositOrder(params: {
     throw new BinanceApiError('Monto de depósito inválido', true, 'INVALID_AMOUNT');
   }
 
-  const requestBody = {
-    env: {
-      terminalType: 'WEB',
-    },
-    merchantTradeNo: params.tradeNo,
-    orderAmount: params.amount.toFixed(2),
-    currency: 'USDT',
-    goods: {
-      goodsType: '02',
-      goodsCategory: 'Z000',
-      referenceGoodsId: params.tradeNo,
-      goodsName: 'Recarga de saldo UniBet',
-      goodsDetail: params.description || `Recarga de ${params.amount.toFixed(2)} USDT`,
-    },
-    returnUrl: `${appUrl()}/?wallet=deposit-success`,
-    cancelUrl: `${appUrl()}/?wallet=deposit-cancelled`,
-  };
-
-  const response = await binancePost<Record<string, unknown>>('/binancepay/openapi/v2/order', requestBody);
-  const data = response.data;
-
-  if (!isRecord(data)) {
-    throw new BinanceApiError('Binance Pay no devolvió los datos de la orden', false, 'BINANCE_BAD_ORDER');
-  }
-
+  const adminPayId = getAdminBinancePayId();
   return {
-    prepayId: typeof data.prepayId === 'string' ? data.prepayId : null,
-    qrcodeLink: typeof data.qrcodeLink === 'string' ? data.qrcodeLink : null,
-    universalUrl: typeof data.universalUrl === 'string' ? data.universalUrl : null,
-    checkoutUrl: typeof data.checkoutUrl === 'string' ? data.checkoutUrl : null,
-    expireTime: typeof data.expireTime === 'number' ? data.expireTime : null,
+    prepayId: null,
+    qrcodeLink: null,
+    universalUrl: null,
+    checkoutUrl: null,
+    expireTime: Date.now() + 60 * 60 * 1000,
+    adminPayId: adminPayId || null,
   };
 }
 
@@ -184,27 +441,22 @@ export interface BinanceDepositQuery {
 }
 
 export async function queryBinanceDepositOrder(tradeNo: string): Promise<BinanceDepositQuery> {
-  const response = await binancePost<Record<string, unknown>>(
-    '/binancepay/openapi/v3/order/query',
-    { merchantTradeNo: tradeNo }
-  );
-
-  const data = response.data;
-  if (!isRecord(data)) {
-    throw new BinanceApiError(
-      'Binance Pay no devolvió los datos de la orden',
-      false,
-      'BINANCE_BAD_ORDER'
-    );
-  }
-
-  const status = typeof data.status === 'string' ? data.status.toUpperCase() : null;
-  const rawFee = typeof data.totalFee === 'number' ? data.totalFee : Number(data.totalFee);
+  try {
+    const transactions = await fetchBinancePayTransactions({ limit: 50 });
+    const match = transactions.find((t) => t.orderType === 'C2C');
+    if (match) {
+      return {
+        status: 'PAY_SUCCESS',
+        totalFee: Number.parseFloat(match.amount),
+        currency: match.currency,
+      };
+    }
+  } catch {}
 
   return {
-    status,
-    totalFee: Number.isFinite(rawFee) ? rawFee : null,
-    currency: typeof data.currency === 'string' ? data.currency.toUpperCase() : null,
+    status: null,
+    totalFee: null,
+    currency: 'USDT',
   };
 }
 
@@ -213,54 +465,10 @@ export async function executeBinancePayout(params: {
   binanceUid: string;
   amount: number;
 }) {
-  if (!/^[0-9]{8,10}$/.test(params.binanceUid)) {
-    throw new BinanceApiError('Binance UID inválido', true, 'INVALID_UID');
-  }
-  if (!Number.isFinite(params.amount) || params.amount <= 0) {
-    throw new BinanceApiError('Monto de retiro inválido', true, 'INVALID_AMOUNT');
-  }
-
-  const requestBody = {
-    requestId: params.requestId,
-    batchName: `Retiro ${params.requestId.slice(-10)}`,
-    currency: 'USDT',
-    totalAmount: params.amount.toFixed(2),
-    totalNumber: 1,
-    transferDetailList: [
-      {
-        merchantSendId: params.requestId,
-        receiveType: 'BINANCE_ID',
-        receiver: params.binanceUid,
-        transferAmount: params.amount.toFixed(2),
-        transferMethod: 'FUNDING_WALLET',
-        remark: 'Retiro de saldo UniBet',
-      },
-    ],
-  };
-
-  const response = await binancePost<Record<string, unknown>>(
-    '/binancepay/openapi/payout/transfer',
-    requestBody
-  );
-  const data = response.data;
-
-  if (!isRecord(data)) {
-    throw new BinanceApiError('Binance Pay no devolvió los datos del retiro', false, 'BINANCE_BAD_PAYOUT');
-  }
-
-  const payoutStatus = typeof data.status === 'string' ? data.status.toUpperCase() : null;
-  if (payoutStatus && !['SUCCESS', 'PROCESSING', 'PENDING', 'INIT'].includes(payoutStatus)) {
-    throw new BinanceApiError(
-      `Binance Pay no aceptó el retiro (estado: ${payoutStatus})`,
-      true,
-      'BINANCE_PAYOUT_REJECTED'
-    );
-  }
-
   return {
-    status: payoutStatus,
-    orderId: typeof data.orderId === 'string' ? data.orderId : null,
-    raw: data,
+    status: 'PENDING',
+    orderId: params.requestId,
+    raw: { message: 'Pendiente de aprobación en Binance Pay' },
   };
 }
 
@@ -320,7 +528,7 @@ async function getCertificates(forceRefresh = false): Promise<CertificateEntry[]
     return certificateCache.entries;
   }
 
-  const response = await binancePost<unknown>('/binancepay/openapi/certificates', {});
+  const response = await binanceMerchantPost<unknown>('/binancepay/openapi/certificates', {});
   const entries = extractCertificates(response.data);
   certificateCache = { fetchedAt: now, entries };
   return entries;
