@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     if (method === 'BEP20') {
       const feeInfo = await getBscWithdrawFee();
       liveFee = feeInfo.withdrawFee;
-      const minRequired = Math.max(feeInfo.withdrawMin, 1.0) + liveFee;
+      const minRequired = Math.round((Math.max(feeInfo.withdrawMin, 0.01) + liveFee) * 100) / 100;
 
       if (amount < minRequired) {
         return NextResponse.json(

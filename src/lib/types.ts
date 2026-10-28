@@ -114,6 +114,10 @@ export interface PendingWithdrawal {
   binanceUid: string | null;
   amount: string;
   createdAt: string;
+  method?: 'BINANCE_PAY' | 'BEP20';
+  destination?: string | null;
+  netPayout?: string;
+  networkFee?: string;
 }
 
 export interface PendingDeposit {

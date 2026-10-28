@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
       .from('transactions')
       .select('id, user_id, type, amount, status, reference_id, metadata, created_at')
       .eq('user_id', profile.id)
+      .neq('status', 'FAILED')
       .order('created_at', { ascending: false })
       .limit(100);
 
@@ -22,9 +23,9 @@ export async function GET(request: NextRequest) {
       throw new Error('No se pudieron cargar tus movimientos');
     }
 
-    const transactions = ((data ?? []) as TransactionRow[]).map((row) =>
-      mapTransaction(row, profile.username)
-    );
+    const transactions = ((data ?? []) as TransactionRow[])
+      .filter((row) => !(row.type === 'DEPOSIT' && row.status !== 'COMPLETED'))
+      .map((row) => mapTransaction(row, profile.username));
 
     return NextResponse.json({ transactions });
   } catch (error) {

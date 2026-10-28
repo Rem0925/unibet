@@ -1012,8 +1012,8 @@ DECLARE
     v_tx_status TEXT := 'PENDING';
     v_tx_metadata JSONB;
 BEGIN
-    IF p_amount IS NULL OR p_amount < 1.0000 OR p_amount > 200.0000 THEN
-        RAISE EXCEPTION 'El retiro debe estar entre 1.00 y 200.00 USDT';
+    IF p_amount IS NULL OR p_amount < 0.0100 OR p_amount > 10000.0000 THEN
+        RAISE EXCEPTION 'El retiro debe estar entre 0.01 y 10000.00 USDT';
     END IF;
 
     SELECT * INTO v_user

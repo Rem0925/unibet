@@ -5,6 +5,7 @@ import {
   ArrowRight,
   CheckCircle2,
   Copy,
+  ExternalLink,
   Info,
   QrCode,
   RefreshCw,
@@ -17,7 +18,7 @@ import { formatUsdt } from '@/lib/format';
 import type { DepositOrderResponse, UserProfile } from '@/lib/types';
 import { Modal, Spinner } from './ui';
 
-const PRESET_AMOUNTS = [5, 10, 20, 50, 100];
+const PRESET_AMOUNTS = [1, 5, 10, 20, 50];
 
 export function DepositModal({
   profile,
@@ -39,7 +40,7 @@ export function DepositModal({
   const [paid, setPaid] = useState(false);
   const startBalance = useRef(Number.parseFloat(profile.balance) || 0);
 
-  const gross = Number.parseFloat(amount) || 0;
+  const gross = Math.round((Number.parseFloat(amount) || 0) * 100) / 100;
   const fee = useMemo(() => Math.round(gross * DEPOSIT_FEE_RATE * 100) / 100, [gross]);
   const net = Math.max(0, gross - fee);
 
@@ -181,14 +182,46 @@ export function DepositModal({
           <div className="rounded-xl border border-[#00f090]/30 bg-[#00f090]/10 p-3.5">
             <div className="flex items-center justify-between text-xs">
               <span className="font-semibold text-white">Monto exacto a transferir:</span>
-              <span className="font-mono text-base font-bold text-[#00f090]">
-                ${formatUsdt(gross)} USDT
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-base font-bold text-[#00f090]">
+                  ${formatUsdt(gross)} USDT
+                </span>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(gross.toFixed(2), 'Monto exacto')}
+                  className="flex items-center gap-1 rounded bg-[#00f090]/20 hover:bg-[#00f090]/30 px-2 py-0.5 text-[11px] font-bold text-[#00f090] transition"
+                >
+                  <Copy className="h-3 w-3" />
+                  Copiar
+                </button>
+              </div>
             </div>
             <p className="mt-1 text-[11px] text-slate-300">
               Comisión de depósito: <strong className="text-white">0% ($0.00 USDT)</strong>. Se te
               acreditarán exactamente <strong className="font-mono text-white">${formatUsdt(gross)} USDT</strong>.
             </p>
+          </div>
+
+          {/* Botón directo a Binance Pay */}
+          <div className="space-y-1.5">
+            <a
+              href="https://www.binance.com/es/pay"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#F0B90B] hover:bg-[#FCD535] py-3 text-sm font-bold text-slate-950 transition shadow-lg shadow-amber-500/10 cursor-pointer"
+            >
+              <ExternalLink className="h-4 w-4 text-black" />
+              Abrir Binance Pay para transferir
+            </a>
+            <div className="text-center">
+              <a
+                href="bnc://app.binance.com/payment/pay"
+                className="inline-flex items-center gap-1 text-[11px] text-amber-400 hover:underline"
+              >
+                <Smartphone className="h-3 w-3" />
+                ¿En celular? Toca aquí para abrir la App de Binance
+              </a>
+            </div>
           </div>
 
           {/* Pay ID de la Casa */}
@@ -282,7 +315,7 @@ export function DepositModal({
                 inputMode="decimal"
                 min={DEPOSIT_MIN}
                 max={DEPOSIT_MAX}
-                step="0.5"
+                step="0.01"
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
                 className="w-full rounded-xl border border-[#222736] bg-[#090a0f] px-3.5 py-2.5 font-mono text-sm text-white focus:border-[#00f090] focus:outline-none"
@@ -322,9 +355,19 @@ export function DepositModal({
             </div>
           ) : (
             <div>
-              <label htmlFor="deposit-uid" className="mb-1.5 block text-xs font-semibold text-slate-300">
-                Tu Binance UID (ID de usuario)
-              </label>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label htmlFor="deposit-uid" className="block text-xs font-semibold text-slate-300">
+                  Tu Binance UID (ID de usuario)
+                </label>
+                <a
+                  href="https://www.binance.com/es/my/settings/profile"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-[11px] text-[#00f090] hover:underline"
+                >
+                  <ExternalLink className="h-3 w-3" /> Ver mi UID
+                </a>
+              </div>
               <input
                 id="deposit-uid"
                 type="text"

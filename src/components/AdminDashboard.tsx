@@ -8,7 +8,9 @@ import {
   CheckCircle2,
   CircleDollarSign,
   Clock,
+  Copy,
   CreditCard,
+  ExternalLink,
   Eye,
   Landmark,
   Receipt,
@@ -22,6 +24,7 @@ import {
   Users,
   Wallet,
   X,
+  Zap,
 } from 'lucide-react';
 import { apiFetch, errorMessage } from '@/lib/api-client';
 import { ROLE_LABELS } from '@/lib/constants';
@@ -325,6 +328,7 @@ export function AdminDashboard({
             pendingConfirm={pendingConfirm}
             setPendingConfirm={setPendingConfirm}
             onReconcile={reconcile}
+            showToast={showToast}
           />
         ) : null}
 
@@ -336,6 +340,7 @@ export function AdminDashboard({
             depositConfirm={depositConfirm}
             setDepositConfirm={setDepositConfirm}
             onReconcile={reconcileDeposit}
+            showToast={showToast}
           />
         ) : null}
 
@@ -414,6 +419,7 @@ function WithdrawalsTab({
   pendingConfirm,
   setPendingConfirm,
   onReconcile,
+  showToast,
 }: {
   overview: AdminOverview | null;
   loading: boolean;
@@ -422,7 +428,17 @@ function WithdrawalsTab({
   pendingConfirm: { referenceId: string; action: 'refund' | 'complete' } | null;
   setPendingConfirm: (value: { referenceId: string; action: 'refund' | 'complete' } | null) => void;
   onReconcile: (withdrawal: PendingWithdrawal, action: 'refund' | 'complete') => void;
+  showToast: (message: string, type?: 'success' | 'warn' | 'error') => void;
 }) {
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast(`${label} copiado al portapapeles`, 'success');
+    } catch {
+      showToast(`No se pudo copiar ${label}`, 'warn');
+    }
+  };
+
   if (!overview && loading) {
     return <div className="h-24 animate-pulse rounded-2xl border border-[#1e2330] bg-[#0e1118]" />;
   }
@@ -447,24 +463,107 @@ function WithdrawalsTab({
       </div>
       <div className="divide-y divide-[#1e2330]">
         {overview.pendingWithdrawals.map((withdrawal) => {
+          const isBep20 = withdrawal.method === 'BEP20';
+          const destination = withdrawal.destination || withdrawal.binanceUid || '';
+          const netAmount = withdrawal.netPayout || withdrawal.amount;
+          const isBusyComplete = busyKey === `wd:${withdrawal.referenceId}:complete`;
+          const isBusyRefund = busyKey === `wd:${withdrawal.referenceId}:refund`;
+          const isConfirming = pendingConfirm?.referenceId === withdrawal.referenceId;
+
           return (
-            <div key={withdrawal.id} className="py-3">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="font-mono text-sm font-bold text-white">
-                    ${formatUsdt(withdrawal.amount)} USDT
-                    <span className="ml-2 font-sans text-xs font-normal text-slate-400">
+            <div key={withdrawal.id} className="py-3.5 space-y-2.5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 space-y-1">
+                  {/* Fila 1: Monto, Usuario y Método */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-base font-bold text-white">
+                      ${formatUsdt(withdrawal.amount)} USDT
+                    </span>
+                    <span className="text-xs text-slate-400">
                       @{withdrawal.username}
                     </span>
+                    {isBep20 ? (
+                      <span className="flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-400">
+                        <Zap className="h-3 w-3" /> Express BEP-20 (BSC)
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-400">
+                        Binance Pay (0% com.)
+                      </span>
+                    )}
                   </div>
-                  <div className="mt-1 truncate text-xs text-slate-400">
-                    UID: <span className="font-mono">{withdrawal.binanceUid ?? '—'}</span> · {formatDate(withdrawal.createdAt)}
+
+                  {/* Fila 2: Destino (UID o Billetera) con botón de copiar */}
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                    <span className="text-slate-400 font-medium">
+                      {isBep20 ? 'Billetera BSC:' : 'Binance UID:'}
+                    </span>
+                    <span className="font-mono font-bold text-white bg-[#141822] px-2 py-0.5 rounded border border-[#212633] truncate max-w-[280px]">
+                      {destination || '—'}
+                    </span>
+                    {destination && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          copyToClipboard(destination, isBep20 ? 'Dirección BSC' : 'UID de Binance')
+                        }
+                        className="flex items-center gap-1 text-[11px] font-semibold text-[#00f090] hover:text-[#00d681] bg-[#00f090]/10 hover:bg-[#00f090]/20 px-2 py-0.5 rounded transition"
+                      >
+                        <Copy className="h-3 w-3" />
+                        Copiar {isBep20 ? 'Dirección' : 'UID'}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(netAmount, 'Monto a transferir')}
+                      className="flex items-center gap-1 text-[11px] font-semibold text-slate-300 hover:text-white bg-[#1a202c] hover:bg-[#2d3748] px-2 py-0.5 rounded transition"
+                    >
+                      <Copy className="h-3 w-3" />
+                      Copiar ${netAmount}
+                    </button>
                   </div>
-                  <div className="truncate font-mono text-[11px] text-slate-500">
-                    Ref: {withdrawal.referenceId}
+
+                  {/* Fila 3: Detalle de red / comisión si es BEP20 */}
+                  {isBep20 && withdrawal.networkFee && Number(withdrawal.networkFee) > 0 ? (
+                    <div className="text-[11px] text-amber-300/90 font-mono">
+                      Neto a enviar: ${formatUsdt(netAmount)} USDT (Gas BSC: ${formatUsdt(withdrawal.networkFee)} USDT)
+                    </div>
+                  ) : null}
+
+                  {/* Fila 4: Fecha y Ref */}
+                  <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                    <span>{formatDate(withdrawal.createdAt)}</span>
+                    <span>·</span>
+                    <span className="font-mono">Ref: {withdrawal.referenceId}</span>
                   </div>
                 </div>
-                <div className="flex shrink-0 gap-1.5">
+
+                {/* Botones de Acción para el Administrador */}
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  {/* Botón directo para abrir Binance */}
+                  {isBep20 ? (
+                    <a
+                      href="https://www.binance.com/es/my/wallet/account/main/withdrawal/crypto/USDT"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-xs font-bold text-amber-300 transition hover:bg-amber-500/25"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Abrir Retiros USDT Binance
+                    </a>
+                  ) : (
+                    <a
+                      href="https://www.binance.com/es/pay"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 rounded-xl border border-[#F0B90B]/40 bg-[#F0B90B]/15 px-3 py-1.5 text-xs font-bold text-[#F0B90B] transition hover:bg-[#F0B90B]/25"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Abrir Binance Pay
+                    </a>
+                  )}
+
+                  {/* Botón Aprobar y Completar */}
                   <button
                     type="button"
                     onClick={() =>
@@ -473,10 +572,14 @@ function WithdrawalsTab({
                         action: 'complete',
                       })
                     }
-                    className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-400 transition hover:bg-emerald-500/20"
+                    disabled={isBusyComplete || isBusyRefund}
+                    className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-400 transition hover:bg-emerald-500/20 disabled:opacity-50"
                   >
-                    Completar
+                    {isBusyComplete ? <Spinner className="h-3 w-3" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                    Aprobar y Completar
                   </button>
+
+                  {/* Botón Reembolsar */}
                   <button
                     type="button"
                     onClick={() =>
@@ -485,12 +588,51 @@ function WithdrawalsTab({
                         action: 'refund',
                       })
                     }
-                    className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs font-bold text-rose-400 transition hover:bg-rose-500/20"
+                    disabled={isBusyComplete || isBusyRefund}
+                    className="flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs font-bold text-rose-400 transition hover:bg-rose-500/20 disabled:opacity-50"
                   >
+                    {isBusyRefund ? <Spinner className="h-3 w-3" /> : null}
                     Reembolsar
                   </button>
                 </div>
               </div>
+
+              {/* Banner de confirmación */}
+              {isConfirming && pendingConfirm ? (
+                <div
+                  className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border p-3 text-xs ${
+                    pendingConfirm.action === 'complete'
+                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                      : 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                  }`}
+                >
+                  <span>
+                    {pendingConfirm.action === 'complete'
+                      ? `¿Confirmas que ya transferiste $${netAmount} USDT a ${destination}? El retiro se marcará como completado.`
+                      : `¿Deseas reembolsar $${withdrawal.amount} USDT al saldo de @${withdrawal.username}?`}
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onReconcile(withdrawal, pendingConfirm.action)}
+                      className={`rounded-lg px-3 py-1 font-bold transition ${
+                        pendingConfirm.action === 'complete'
+                          ? 'bg-emerald-400 text-slate-950 hover:bg-emerald-300'
+                          : 'bg-rose-500 text-white hover:bg-rose-400'
+                      }`}
+                    >
+                      Confirmar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingConfirm(null)}
+                      className="rounded-lg border border-[#2d3447] bg-[#161a24] px-3 py-1 text-slate-300 transition hover:bg-[#1e2330]"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           );
         })}
@@ -506,6 +648,7 @@ function DepositsTab({
   depositConfirm,
   setDepositConfirm,
   onReconcile,
+  showToast,
 }: {
   overview: AdminOverview | null;
   loading: boolean;
@@ -513,7 +656,17 @@ function DepositsTab({
   depositConfirm: string | null;
   setDepositConfirm: (value: string | null) => void;
   onReconcile: (deposit: PendingDeposit, action: 'verify' | 'fail') => void;
+  showToast: (message: string, type?: 'success' | 'warn' | 'error') => void;
 }) {
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast(`${label} copiado al portapapeles`, 'success');
+    } catch {
+      showToast(`No se pudo copiar ${label}`, 'warn');
+    }
+  };
+
   if (!overview && loading) {
     return <div className="h-24 animate-pulse rounded-2xl border border-[#1e2330] bg-[#0e1118]" />;
   }
@@ -523,7 +676,7 @@ function DepositsTab({
       <EmptyState
         icon={<CircleDollarSign className="h-6 w-6" />}
         title="Sin depósitos pendientes"
-        description="Todas las órdenes de recarga se procesaron correctamente."
+        description="Todas las órdenes de recarga activas fueron procesadas correctamente."
       />
     );
   }
@@ -531,12 +684,15 @@ function DepositsTab({
   return (
     <div>
       <div className="mb-3 text-xs text-slate-400">
-        {overview.pendingDeposits.length} recargas sin acreditar
+        {overview.pendingDeposits.length} recargas recientes en verificación (últimos 30 min)
       </div>
       <div className="divide-y divide-[#1e2330]">
         {overview.pendingDeposits.map((deposit) => {
+          const isBusyVerify = busyKey === `dp:${deposit.referenceId}:verify`;
+          const isConfirming = depositConfirm === deposit.referenceId;
+
           return (
-            <div key={deposit.id} className="py-3">
+            <div key={deposit.id} className="py-3.5 space-y-2">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="font-mono text-sm font-bold text-white">
@@ -545,36 +701,65 @@ function DepositsTab({
                       @{deposit.username}
                     </span>
                   </div>
-                  <div className="mt-1 truncate text-xs text-slate-400">
-                    {formatDate(deposit.createdAt)}
-                  </div>
-                  <div className="truncate font-mono text-[11px] text-slate-500">
-                    Ref: {deposit.referenceId}
+                  <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
+                    <span>{formatDate(deposit.createdAt)}</span>
+                    <span>·</span>
+                    <span className="font-mono text-[11px] text-slate-400">Ref: {deposit.referenceId}</span>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(deposit.referenceId, 'Referencia')}
+                      className="text-[#00f090] hover:text-[#00d681] text-[10px] font-semibold flex items-center gap-0.5 bg-[#00f090]/10 px-1.5 py-0.5 rounded"
+                    >
+                      <Copy className="h-2.5 w-2.5" /> Copiar
+                    </button>
                   </div>
                 </div>
-                <div className="flex shrink-0 gap-1.5">
+
+                <div className="flex shrink-0 gap-2">
                   <button
                     type="button"
                     onClick={() => onReconcile(deposit, 'verify')}
-                    disabled={busyKey === `dp:${deposit.referenceId}:verify`}
-                    className="flex items-center gap-1.5 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-xs font-bold text-sky-400 transition hover:bg-sky-500/20"
+                    disabled={isBusyVerify}
+                    className="flex items-center gap-1.5 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-xs font-bold text-sky-400 transition hover:bg-sky-500/20 disabled:opacity-50"
                   >
-                    {busyKey === `dp:${deposit.referenceId}:verify` ? (
+                    {isBusyVerify ? (
                       <Spinner className="h-3 w-3" />
                     ) : (
                       <RefreshCw className="h-3 w-3" />
                     )}
-                    Verificar
+                    Verificar en Binance
                   </button>
                   <button
                     type="button"
                     onClick={() => setDepositConfirm(deposit.referenceId)}
                     className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs font-bold text-rose-400 transition hover:bg-rose-500/20"
                   >
-                    Marcar fallido
+                    Descartar intento
                   </button>
                 </div>
               </div>
+
+              {isConfirming ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
+                  <span>¿Descartar este intento de depósito no pagado de @{deposit.username}?</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onReconcile(deposit, 'fail')}
+                      className="rounded-lg bg-rose-500 px-3 py-1 font-bold text-white transition hover:bg-rose-400"
+                    >
+                      Confirmar descarte
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDepositConfirm(null)}
+                      className="rounded-lg border border-[#2d3447] bg-[#161a24] px-3 py-1 text-slate-300 transition hover:bg-[#1e2330]"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           );
         })}

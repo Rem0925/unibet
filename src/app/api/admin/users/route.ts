@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
           .from('transactions')
           .select('id, user_id, type, amount, status, reference_id, metadata, created_at')
           .eq('user_id', userId)
+          .neq('status', 'FAILED')
           .order('created_at', { ascending: false })
           .limit(100),
         supabase
@@ -55,9 +56,9 @@ export async function GET(request: NextRequest) {
           .limit(100),
       ]);
 
-      const transactions = (txResult.data ?? []).map((row) =>
-        mapTransaction(row as TransactionRow, user.username)
-      );
+      const transactions = ((txResult.data ?? []) as TransactionRow[])
+        .filter((row) => !(row.type === 'DEPOSIT' && row.status !== 'COMPLETED'))
+        .map((row) => mapTransaction(row, user.username));
 
       const rawBets = (betResult.data ?? []) as Array<{
         id: string;

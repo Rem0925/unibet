@@ -146,7 +146,7 @@ export function WalletView({
             <button
               type="button"
               onClick={onWithdraw}
-              disabled={balance < 1}
+              disabled={balance < 0.01}
               className="flex flex-1 items-center justify-center gap-1.5 rounded border border-[#2d3447] bg-[#161a24] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#1e2330] disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
             >
               <ArrowUpRight className="h-4 w-4" /> Retirar a Binance
@@ -154,7 +154,7 @@ export function WalletView({
           </div>
           <div className="mt-3 flex items-start gap-1.5 font-mono text-[9px] leading-relaxed text-slate-600">
             <Info className="mt-0.5 h-3 w-3 shrink-0" />
-            Recargas con Binance Pay: 1.5% de comisión de entrada, acreditada al instante. Los
+            Recargas con Binance Pay: 0% de comisión de entrada, acreditada al instante. Los
             retiros a tu UID no tienen comisión.
           </div>
         </section>

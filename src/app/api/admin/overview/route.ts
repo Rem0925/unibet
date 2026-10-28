@@ -85,11 +85,12 @@ export async function GET(request: NextRequest) {
       supabase
         .from('transactions')
         .select('id, user_id, type, amount, status, reference_id, metadata, created_at')
+        .neq('status', 'FAILED')
         .order('created_at', { ascending: false })
-        .limit(60),
+        .limit(100),
       supabase
         .from('transactions')
-        .select('id, user_id, amount, reference_id, created_at')
+        .select('id, user_id, amount, reference_id, metadata, created_at')
         .eq('type', 'WITHDRAW')
         .eq('status', 'PENDING')
         .order('created_at', { ascending: false })
@@ -99,6 +100,7 @@ export async function GET(request: NextRequest) {
         .select('id, user_id, amount, reference_id, created_at')
         .eq('type', 'DEPOSIT')
         .eq('status', 'PENDING')
+        .gte('created_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
         .order('created_at', { ascending: false })
         .limit(50),
       supabase
@@ -120,7 +122,9 @@ export async function GET(request: NextRequest) {
     }
 
     const users = ((userData ?? []) as ProfileRow[]).map(mapUserProfile);
-    const transactions = (txData ?? []) as TransactionRow[];
+    const transactions = ((txData ?? []) as TransactionRow[])
+      .filter((row) => !(row.type === 'DEPOSIT' && row.status !== 'COMPLETED'))
+      .slice(0, 60);
     const pendingRows = (pendingData ?? []) as PendingWithdrawalRow[];
     const pendingDepositRows = (pendingDepositData ?? []) as PendingDepositRow[];
     const auditRows = (auditData ?? []) as AuditLogRow[];

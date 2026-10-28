@@ -98,6 +98,7 @@ export interface PendingWithdrawalRow {
   user_id: string;
   amount: string | number;
   reference_id: string | null;
+  metadata?: unknown;
   created_at: string;
 }
 
@@ -106,6 +107,13 @@ export function mapPendingWithdrawal(
   username: string,
   binanceUid: string | null
 ): PendingWithdrawal {
+  const meta = metadataRecord(row.metadata);
+  const method = meta.method === 'BEP20' ? 'BEP20' : 'BINANCE_PAY';
+  const destination =
+    (typeof meta.bep20_address === 'string' && meta.bep20_address) ||
+    (typeof meta.binance_uid === 'string' && meta.binance_uid) ||
+    binanceUid;
+
   return {
     id: row.id,
     referenceId: row.reference_id ?? '',
@@ -114,6 +122,10 @@ export function mapPendingWithdrawal(
     binanceUid,
     amount: String(row.amount),
     createdAt: row.created_at,
+    method,
+    destination: destination ?? null,
+    netPayout: meta.net_payout != null ? String(meta.net_payout) : undefined,
+    networkFee: meta.network_fee != null ? String(meta.network_fee) : undefined,
   };
 }
 

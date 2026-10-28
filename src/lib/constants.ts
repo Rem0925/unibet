@@ -1,11 +1,11 @@
 export const BET_MIN = 0.5;
 export const BET_MAX = 500;
 export const BET_USER_MARKET_MAX = 150;
-export const DEPOSIT_MIN = 1;
-export const DEPOSIT_MAX = 1000;
-export const WITHDRAW_MIN = 1;
-export const WITHDRAW_MAX = 200;
-export const WITHDRAW_BEP20_MIN = 5;
+export const DEPOSIT_MIN = 0.01;
+export const DEPOSIT_MAX = 50000;
+export const WITHDRAW_MIN = 0.01;
+export const WITHDRAW_MAX = 10000;
+export const WITHDRAW_BEP20_MIN = 1.0;
 export const DEPOSIT_FEE_RATE = 0.0;
 export const PAYOUT_MULTIPLIER_CAP = 20;
 export const MIN_OPTIONS = 2;
