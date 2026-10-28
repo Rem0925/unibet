@@ -1,8 +1,8 @@
-export type AppTab = 'EXPLORE' | 'MY_BETS' | 'WALLET' | 'MODERATION' | 'ADMIN';
+export type AppTab = 'EXPLORE' | 'ACCOUNT' | 'MODERATION' | 'ADMIN';
 
 export type Role = 'ADMIN' | 'MODERATOR' | 'USER';
 
-export type MarketCategory = 'FUTBOL' | 'BEISBOL' | 'CAMPUS' | 'GAMING' | 'OTRO';
+export type MarketCategory = string;
 
 export type MarketStatus = 'OPEN' | 'CLOSED' | 'RESOLVED' | 'CANCELLED';
 
@@ -175,4 +175,23 @@ export interface WithdrawResponse {
   status: 'COMPLETED' | 'PENDING';
   message: string;
   remainingBalance: string;
+}
+
+export type ToastType = 'success' | 'warn' | 'error';
+
+export interface ToastItem {
+  id: number;
+  message: string;
+  type: ToastType;
+}
+
+export interface CreateMarketResponse {
+  success: boolean;
+  message?: string;
+  market: {
+    id: string;
+    title: string;
+    closeTime: string;
+    status: MarketStatus;
+  };
 }

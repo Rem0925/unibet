@@ -110,17 +110,17 @@ export function AuthScreen({ configured }: { configured: boolean }) {
     }
 
     if (!binanceUid) {
-      setError('Por favor indica tu Binance Pay UID (8 a 10 dígitos) para configurar tus retiros en USDT.');
+      setError('Indica tu Binance Pay UID (8 a 10 dígitos) para vincular tus retiros.');
       return;
     }
 
     if (!/^[0-9]{8,10}$/.test(binanceUid)) {
-      setError('El Binance Pay UID debe ser numérico y tener entre 8 y 10 dígitos (búscalo en tu app de Binance).');
+      setError('El Binance Pay UID debe tener entre 8 y 10 dígitos numéricos.');
       return;
     }
 
     if (!regRulesAccepted) {
-      setError('Debes confirmar que aceptas las reglas del grupo para crear tu cuenta.');
+      setError('Debes confirmar que los datos ingresados son correctos para continuar.');
       return;
     }
 
@@ -149,83 +149,90 @@ export function AuthScreen({ configured }: { configured: boolean }) {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#090a0f] px-4 py-10">
-      <div className="grid w-full max-w-5xl gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        {/* Banner descriptivo / Terminal Info */}
-        <section className="flex flex-col justify-between rounded-lg border border-[#1e2330] bg-[#0e1118] p-6 sm:p-8">
+    <main className="flex min-h-screen items-center justify-center bg-[#090a0f] px-4 py-12 font-sans">
+      <div className="grid w-full max-w-5xl gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+        {/* Lado izquierdo: Presentación */}
+        <section className="flex flex-col justify-between rounded-3xl border border-[#1e2330] bg-[#0c0d12]/90 p-8 sm:p-10 shadow-2xl">
           <div>
             <div className="mb-8 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded border border-[#262c3d] bg-[#141822]">
-                <Flame className="h-5 w-5 text-[#00f090]" />
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#00f090]/15 text-[#00f090]">
+                <Flame className="h-6 w-6" />
               </div>
               <div className="flex items-center gap-2">
-                <span className="font-mono text-xl font-black uppercase tracking-tight text-white">
+                <span className="text-2xl font-black tracking-tight text-white">
                   Uni<span className="text-[#00f090]">Bet</span>
                 </span>
-                <span className="rounded border border-[#00f090]/30 bg-[#00f090]/10 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase text-[#00f090]">
+                <span className="rounded-full border border-[#00f090]/30 bg-[#00f090]/10 px-2 py-0.5 text-[10px] font-bold text-[#00f090]">
                   USDT
                 </span>
               </div>
             </div>
 
-            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-[#00f090]">
-              Mercados de predicción entre amigos
-            </p>
-            <h1 className="mt-3 max-w-xl text-3xl font-bold leading-tight tracking-tight text-white sm:text-4xl">
-              Apuestas pari-mutuel.
+            <span className="inline-block rounded-full border border-[#00f090]/20 bg-[#00f090]/10 px-3 py-1 text-xs font-semibold text-[#00f090]">
+              Predicciones entre amigos
+            </span>
+            <h1 className="mt-4 text-3xl sm:text-4xl font-extrabold leading-tight tracking-tight text-white">
+              Crea pronósticos.
               <br />
-              <span className="text-slate-400">Cero casa contra ti.</span>
+              <span className="text-slate-400">Gana en cuotas dinámicas.</span>
             </h1>
-            <p className="mt-4 max-w-xl text-sm leading-relaxed text-slate-400">
-              Todo el pozo se reparte entre los ganadores. Recargas con Binance Pay y retiras directo
-              a tu UID en USDT. Sin cuotas infladas ni intermediarios bancarios.
+            <p className="mt-4 text-sm leading-relaxed text-slate-400">
+              Plataforma comunitaria de predicciones deportivas y eventos. Recargas y retiras
+              directo en USDT con Binance Pay, sin intermediarios bancarios ni cuotas fijas abusivas.
             </p>
 
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
-              {[
-                {
-                  icon: ShieldCheck,
-                  title: 'Saldos atómicos',
-                  text: 'Cada apuesta y retiro se valida en PostgreSQL con bloqueo de filas.',
-                },
-                {
-                  icon: Wallet,
-                  title: 'Binance Pay',
-                  text: 'Recargas instantáneas y retiros acreditados a tu UID oficial.',
-                },
-                {
-                  icon: TrendingUp,
-                  title: 'Cuotas vivas',
-                  text: 'El multiplicador se calcula con el dinero real aportado a cada opción.',
-                },
-                {
-                  icon: CheckCircle2,
-                  title: 'Círculo cerrado',
-                  text: 'Acceso privado para amigos. Sin spreads ocultos de casas tradicionales.',
-                },
-              ].map((feature) => (
-                <div
-                  key={feature.title}
-                  className="rounded-md border border-[#1e2330] bg-[#11141c] p-3"
-                >
-                  <feature.icon className="mb-2 h-4 w-4 text-[#00f090]" />
-                  <div className="font-mono text-[11px] font-bold text-white">{feature.title}</div>
-                  <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{feature.text}</p>
+              <div className="rounded-2xl border border-[#1e2330] bg-[#141822]/60 p-4">
+                <div className="mb-2 inline-flex rounded-xl bg-[#00f090]/10 p-2 text-[#00f090]">
+                  <TrendingUp className="h-4 w-4" />
                 </div>
-              ))}
+                <div className="text-xs font-bold text-white">Cuotas dinámicas</div>
+                <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                  Las cuotas se recalculan en vivo según el total aportado por los participantes.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-[#1e2330] bg-[#141822]/60 p-4">
+                <div className="mb-2 inline-flex rounded-xl bg-[#00f090]/10 p-2 text-[#00f090]">
+                  <Wallet className="h-4 w-4" />
+                </div>
+                <div className="text-xs font-bold text-white">Binance Pay</div>
+                <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                  Acreditación de saldo instantánea y retiros directos a tu ID de usuario.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-[#1e2330] bg-[#141822]/60 p-4">
+                <div className="mb-2 inline-flex rounded-xl bg-[#00f090]/10 p-2 text-[#00f090]">
+                  <ShieldCheck className="h-4 w-4" />
+                </div>
+                <div className="text-xs font-bold text-white">Transparencia</div>
+                <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                  El pozo se reparte de forma verificable entre los boletos ganadores.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-[#1e2330] bg-[#141822]/60 p-4">
+                <div className="mb-2 inline-flex rounded-xl bg-[#00f090]/10 p-2 text-[#00f090]">
+                  <CheckCircle2 className="h-4 w-4" />
+                </div>
+                <div className="text-xs font-bold text-white">Círculo privado</div>
+                <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                  Espacio exclusivo para amigos y miembros autorizados de la comunidad.
+                </p>
+              </div>
             </div>
           </div>
 
-          <div className="mt-8 rounded border border-[#f59e0b]/25 bg-[#181511] p-3 font-mono text-[10px] leading-relaxed text-[#fbbf24]">
-            Regla del batacazo: si gana una opción que nadie apostó, el 70% va a la Casa y el 30% al
-            creador. Multiplicador con tope de 20x.
+          <div className="mt-8 text-xs text-slate-500">
+            UniBet opera exclusivamente con saldos en USDT y pagos verificados por Binance.
           </div>
         </section>
 
-        {/* Formulario de Acceso y Registro */}
-        <section className="flex flex-col justify-center rounded-lg border border-[#1e2330] bg-[#11141c] p-6 sm:p-8">
-          {/* Selector de Pestañas: Iniciar Sesión vs Crear Cuenta */}
-          <div className="mb-6 flex border-b border-[#1e2330]">
+        {/* Lado derecho: Formulario */}
+        <section className="flex flex-col justify-center rounded-3xl border border-[#1e2330] bg-[#0c0d12]/90 p-8 sm:p-10 shadow-2xl">
+          {/* Selector de Pestañas */}
+          <div className="mb-6 flex rounded-xl border border-[#1e2330] bg-[#141822]/60 p-1">
             <button
               type="button"
               onClick={() => {
@@ -233,10 +240,10 @@ export function AuthScreen({ configured }: { configured: boolean }) {
                 setError(null);
                 setMagicSent(false);
               }}
-              className={`flex-1 pb-3 text-center font-mono text-xs font-bold uppercase tracking-wider transition ${
+              className={`flex-1 rounded-lg py-2 text-xs font-semibold transition ${
                 tab === 'LOGIN'
-                  ? 'border-b-2 border-[#00f090] text-white'
-                  : 'text-slate-500 hover:text-slate-300'
+                  ? 'bg-[#00f090] text-slate-950 shadow'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               Iniciar sesión
@@ -248,29 +255,29 @@ export function AuthScreen({ configured }: { configured: boolean }) {
                 setError(null);
                 setMagicSent(false);
               }}
-              className={`flex-1 pb-3 text-center font-mono text-xs font-bold uppercase tracking-wider transition ${
+              className={`flex-1 rounded-lg py-2 text-xs font-semibold transition ${
                 tab === 'REGISTER'
-                  ? 'border-b-2 border-[#00f090] text-white'
-                  : 'text-slate-500 hover:text-slate-300'
+                  ? 'bg-[#00f090] text-slate-950 shadow'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               Crear cuenta
             </button>
           </div>
 
-          <h2 className="text-lg font-bold text-white">
-            {tab === 'LOGIN' ? 'Entrar a la terminal' : 'Registrar nueva cuenta'}
+          <h2 className="text-xl font-bold text-white">
+            {tab === 'LOGIN' ? 'Bienvenido a UniBet' : 'Crea tu cuenta'}
           </h2>
           <p className="mt-1 text-xs text-slate-400">
             {tab === 'LOGIN'
-              ? 'Accede a tu billetera y mercados con tu cuenta activa.'
-              : 'Únete a la plataforma y afilia tu Binance Pay para depósitos y retiros.'}
+              ? 'Accede con tu cuenta autorizada para ver mercados y pronósticos.'
+              : 'Regístrate y vincula tu Binance UID para recibir tus retiros.'}
           </p>
 
           {!configured ? (
-            <div className="mt-5 rounded border border-[#f59e0b]/30 bg-[#181511] p-3 text-[11px] leading-relaxed text-[#fbbf24]">
+            <div className="mt-4 rounded-xl border border-[#f59e0b]/30 bg-[#181511] p-3 text-xs text-[#fbbf24]">
               <div className="mb-1 flex items-center gap-1.5 font-bold">
-                <AlertTriangle className="h-3.5 w-3.5" />
+                <AlertTriangle className="h-4 w-4" />
                 Falta configurar Supabase
               </div>
               Añade las variables de entorno de Supabase en tu despliegue.
@@ -278,28 +285,27 @@ export function AuthScreen({ configured }: { configured: boolean }) {
           ) : null}
 
           {error ? (
-            <div className="mt-5 rounded border border-[#f43f5e]/35 bg-[#1f1113] px-3 py-2 text-[11px] text-[#fda4af]">
+            <div className="mt-4 rounded-xl border border-[#f43f5e]/30 bg-[#f43f5e]/10 p-3 text-xs text-[#fda4af]">
               {error}
             </div>
           ) : null}
 
           {magicSent ? (
-            <div className="mt-6 rounded border border-[#00f090]/30 bg-[#121f18] p-5 text-center">
-              <CheckCircle2 className="mx-auto mb-2 h-7 w-7 text-[#00f090]" />
-              <p className="text-sm font-bold text-white">
-                {tab === 'REGISTER' ? '¡Registro casi listo!' : 'Revisa tu correo'}
+            <div className="mt-6 rounded-2xl border border-[#00f090]/30 bg-[#00f090]/10 p-6 text-center">
+              <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-[#00f090]" />
+              <p className="text-base font-bold text-white">
+                {tab === 'REGISTER' ? '¡Registro iniciado!' : 'Revisa tu correo'}
               </p>
-              <p className="mt-1 text-xs leading-relaxed text-slate-300">
+              <p className="mt-2 text-xs leading-relaxed text-slate-300">
                 Enviamos un enlace de acceso seguro a <strong className="text-white">{sentEmail}</strong>.
               </p>
               <p className="mt-2 text-[11px] text-slate-400">
-                Haz clic en el enlace del correo para{' '}
-                {tab === 'REGISTER' ? 'activar tu cuenta y vincular tu Binance UID' : 'acceder a tu terminal'}.
+                Haz clic en el enlace para entrar de inmediato sin necesidad de contraseña.
               </p>
               <button
                 type="button"
                 onClick={() => setMagicSent(false)}
-                className="mt-4 text-[11px] font-bold text-[#00f090] underline underline-offset-4"
+                className="mt-5 text-xs font-bold text-[#00f090] hover:underline"
               >
                 Volver o usar otro correo
               </button>
@@ -311,27 +317,48 @@ export function AuthScreen({ configured }: { configured: boolean }) {
                 type="button"
                 onClick={handleGoogle}
                 disabled={!configured || googleLoading}
-                className="mt-6 flex w-full items-center justify-center gap-2 rounded bg-white px-4 py-2.5 text-xs font-bold text-slate-900 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-6 flex w-full items-center justify-center gap-2.5 rounded-xl bg-white px-4 py-3 text-xs font-bold text-slate-900 transition hover:bg-slate-100 disabled:opacity-50"
               >
-                {googleLoading ? <Spinner /> : null}
+                {googleLoading ? (
+                  <Spinner className="text-slate-900" />
+                ) : (
+                  <svg className="h-4 w-4" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                    />
+                  </svg>
+                )}
                 {tab === 'LOGIN' ? 'Continuar con Google' : 'Registrarse con Google'}
               </button>
 
-              <div className="my-5 flex items-center gap-3 text-[10px] uppercase tracking-wider text-slate-600">
-                <div className="h-px flex-1 bg-[#222736]" />
-                {tab === 'LOGIN' ? 'o con enlace por correo' : 'o registro manual'}
-                <div className="h-px flex-1 bg-[#222736]" />
+              <div className="my-5 flex items-center gap-3 text-[11px] uppercase tracking-wider text-slate-500">
+                <div className="h-px flex-1 bg-[#1e2330]" />
+                <span>o con correo</span>
+                <div className="h-px flex-1 bg-[#1e2330]" />
               </div>
 
               {/* Formulario de INICIAR SESIÓN */}
               {tab === 'LOGIN' ? (
-                <form onSubmit={handleLogin} className="space-y-3">
+                <form onSubmit={handleLogin} className="space-y-4">
                   <div>
-                    <label htmlFor="login-email" className="block text-[11px] font-bold text-slate-300">
+                    <label htmlFor="login-email" className="mb-1.5 block text-xs font-semibold text-slate-300">
                       Correo electrónico
                     </label>
-                    <div className="relative mt-1">
-                      <Mail className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                    <div className="relative">
+                      <Mail className="pointer-events-none absolute left-3.5 top-3 h-4 w-4 text-slate-500" />
                       <input
                         id="login-email"
                         type="email"
@@ -340,7 +367,7 @@ export function AuthScreen({ configured }: { configured: boolean }) {
                         onChange={(event) => setLoginEmail(event.target.value)}
                         placeholder="tu-correo@gmail.com"
                         disabled={!configured || loading}
-                        className="w-full rounded border border-[#222736] bg-[#090a0f] py-2 pl-9 pr-3 text-xs text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none disabled:opacity-50"
+                        className="w-full rounded-xl border border-[#222736] bg-[#090a0f] py-2.5 pl-10 pr-3.5 text-sm text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none disabled:opacity-50"
                       />
                     </div>
                   </div>
@@ -348,20 +375,20 @@ export function AuthScreen({ configured }: { configured: boolean }) {
                   <button
                     type="submit"
                     disabled={!configured || loading}
-                    className="flex w-full items-center justify-center gap-2 rounded border border-[#2d3447] bg-[#161a24] px-4 py-2.5 text-xs font-bold text-white transition hover:bg-[#1e2330] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#00f090] py-3 text-sm font-bold text-slate-950 transition hover:bg-[#00d681] disabled:opacity-50"
                   >
-                    {loading ? <Spinner /> : <ArrowRight className="h-4 w-4" />}
-                    Entrar a mi terminal
+                    {loading ? <Spinner className="text-black" /> : <ArrowRight className="h-4 w-4" />}
+                    Acceder a UniBet
                   </button>
                 </form>
               ) : (
-                <form onSubmit={handleRegister} className="space-y-3">
+                <form onSubmit={handleRegister} className="space-y-4">
                   <div>
-                    <label htmlFor="reg-email" className="block text-[11px] font-bold text-slate-300">
+                    <label htmlFor="reg-email" className="mb-1.5 block text-xs font-semibold text-slate-300">
                       Correo electrónico <span className="text-[#00f090]">*</span>
                     </label>
-                    <div className="relative mt-1">
-                      <Mail className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                    <div className="relative">
+                      <Mail className="pointer-events-none absolute left-3.5 top-3 h-4 w-4 text-slate-500" />
                       <input
                         id="reg-email"
                         type="email"
@@ -370,41 +397,39 @@ export function AuthScreen({ configured }: { configured: boolean }) {
                         onChange={(event) => setRegEmail(event.target.value)}
                         placeholder="tu-correo@gmail.com"
                         disabled={!configured || loading}
-                        className="w-full rounded border border-[#222736] bg-[#090a0f] py-2 pl-9 pr-3 text-xs text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none disabled:opacity-50"
+                        className="w-full rounded-xl border border-[#222736] bg-[#090a0f] py-2.5 pl-10 pr-3.5 text-sm text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none disabled:opacity-50"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label htmlFor="reg-user" className="block text-[11px] font-bold text-slate-300">
-                      Nombre de usuario / Alias <span className="text-slate-500 font-normal">(opcional)</span>
+                    <label htmlFor="reg-user" className="mb-1.5 block text-xs font-semibold text-slate-300">
+                      Nombre de usuario <span className="text-slate-500 font-normal">(opcional)</span>
                     </label>
-                    <div className="relative mt-1">
-                      <User className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                    <div className="relative">
+                      <User className="pointer-events-none absolute left-3.5 top-3 h-4 w-4 text-slate-500" />
                       <input
                         id="reg-user"
                         type="text"
                         autoComplete="username"
                         value={regUsername}
                         onChange={(event) => setRegUsername(event.target.value)}
-                        placeholder="cripto_apuestas"
+                        placeholder="mi_usuario"
                         disabled={!configured || loading}
-                        className="w-full rounded border border-[#222736] bg-[#090a0f] py-2 pl-9 pr-3 text-xs text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none disabled:opacity-50"
+                        className="w-full rounded-xl border border-[#222736] bg-[#090a0f] py-2.5 pl-10 pr-3.5 text-sm text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none disabled:opacity-50"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <div className="flex items-center justify-between">
-                      <label htmlFor="reg-uid" className="block text-[11px] font-bold text-slate-300">
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <label htmlFor="reg-uid" className="text-xs font-semibold text-slate-300">
                         Binance Pay UID <span className="text-[#00f090]">*</span>
                       </label>
-                      <span className="font-mono text-[9px] text-[#00f090]">
-                        8 a 10 dígitos numéricos
-                      </span>
+                      <span className="text-[11px] text-slate-500">8 a 10 dígitos</span>
                     </div>
-                    <div className="relative mt-1">
-                      <CreditCard className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                    <div className="relative">
+                      <CreditCard className="pointer-events-none absolute left-3.5 top-3 h-4 w-4 text-slate-500" />
                       <input
                         id="reg-uid"
                         type="text"
@@ -414,26 +439,24 @@ export function AuthScreen({ configured }: { configured: boolean }) {
                         onChange={(event) => setRegBinanceUid(event.target.value.replace(/[^0-9]/g, ''))}
                         placeholder="Ej: 198274635"
                         disabled={!configured || loading}
-                        className="w-full rounded border border-[#222736] bg-[#090a0f] py-2 pl-9 pr-3 font-mono text-xs text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none disabled:opacity-50"
+                        className="w-full rounded-xl border border-[#222736] bg-[#090a0f] py-2.5 pl-10 pr-3.5 font-mono text-sm text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none disabled:opacity-50"
                       />
                     </div>
-                    <p className="mt-1 flex items-center gap-1 text-[10px] text-slate-500">
-                      <Info className="h-3 w-3 shrink-0 text-slate-400" />
-                      Tu Binance ID para procesar retiros directos a tu saldo en Binance Pay.
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Tu identificador de Binance para transferir tus retiros en USDT.
                     </p>
                   </div>
 
                   <div className="pt-1">
-                    <label className="flex items-start gap-2 cursor-pointer">
+                    <label className="flex items-start gap-2.5 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={regRulesAccepted}
                         onChange={(e) => setRegRulesAccepted(e.target.checked)}
                         className="mt-0.5 rounded border-[#222736] bg-[#090a0f] text-[#00f090] focus:ring-0"
                       />
-                      <span className="text-[10px] leading-relaxed text-slate-400">
-                        Confirmo que mi Binance UID es correcto y acepto operar en USDT bajo las reglas
-                        pari-mutuel del grupo.
+                      <span className="text-xs leading-relaxed text-slate-400">
+                        Confirmo que mi Binance UID es correcto y acepto operar con saldos en USDT.
                       </span>
                     </label>
                   </div>
@@ -441,19 +464,18 @@ export function AuthScreen({ configured }: { configured: boolean }) {
                   <button
                     type="submit"
                     disabled={!configured || loading}
-                    className="flex w-full items-center justify-center gap-2 rounded bg-[#00f090] px-4 py-2.5 text-xs font-bold text-black transition hover:bg-[#00d681] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#00f090] py-3 text-sm font-bold text-slate-950 transition hover:bg-[#00d681] disabled:opacity-50"
                   >
                     {loading ? <Spinner className="text-black" /> : <ArrowRight className="h-4 w-4" />}
-                    Crear cuenta y afiliar Binance
+                    Crear cuenta
                   </button>
                 </form>
               )}
             </>
           )}
 
-          <p className="mt-6 border-t border-[#1e2330] pt-4 text-[10px] leading-relaxed text-slate-600">
-            Círculo privado universitario. No usamos contraseñas recuperables: el acceso es validado
-            por enlaces criptográficos directos o cuenta autenticada de Google.
+          <p className="mt-6 border-t border-[#1e2330] pt-4 text-center text-[11px] text-slate-500">
+            Acceso seguro sin contraseñas mediante Google o enlace criptográfico al correo.
           </p>
         </section>
       </div>

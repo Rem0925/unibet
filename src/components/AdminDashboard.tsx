@@ -354,13 +354,13 @@ function MetricCard({
   tone?: string;
 }) {
   return (
-    <div className="rounded-lg border border-[#1e2330] bg-[#11141c] p-3">
-      <div className="mb-1 flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wide text-slate-500">
+    <div className="rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-4">
+      <div className="mb-1.5 flex items-center gap-1.5 text-xs text-slate-400">
         <span className="text-slate-400">{icon}</span>
-        <span className="truncate">{label}</span>
+        <span className="truncate font-medium">{label}</span>
       </div>
-      <div className={`font-mono text-sm font-bold tabular-nums ${tone}`}>{value}</div>
-      <div className="mt-0.5 truncate font-mono text-[9px] text-slate-600">{hint}</div>
+      <div className={`font-mono text-lg font-bold tabular-nums ${tone}`}>{value}</div>
+      <div className="mt-1 truncate text-xs text-slate-500">{hint}</div>
     </div>
   );
 }

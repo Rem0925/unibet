@@ -8,6 +8,8 @@ import { formatUsdt } from '@/lib/format';
 import type { DepositOrderResponse, UserProfile } from '@/lib/types';
 import { Modal, Spinner } from './ui';
 
+const PRESET_AMOUNTS = [5, 10, 20, 50, 100];
+
 export function DepositModal({
   profile,
   onClose,
@@ -43,14 +45,14 @@ export function DepositModal({
         if (!active) return;
         if (Number.parseFloat(updated.balance) > startBalance.current + 0.001) {
           setPaid(true);
-          showToast('Depósito acreditado en tu billetera', 'success');
+          showToast('Depósito acreditado con éxito', 'success');
         }
       } catch {}
     };
 
     const interval = setInterval(() => {
       void check();
-    }, 6000);
+    }, 5000);
 
     return () => {
       active = false;
@@ -63,7 +65,7 @@ export function DepositModal({
     setError(null);
 
     if (!Number.isFinite(gross) || gross < DEPOSIT_MIN || gross > DEPOSIT_MAX) {
-      setError(`El depósito debe estar entre $${formatUsdt(DEPOSIT_MIN)} y $${formatUsdt(DEPOSIT_MAX)} USDT.`);
+      setError(`El monto debe estar entre $${formatUsdt(DEPOSIT_MIN)} y $${formatUsdt(DEPOSIT_MAX)} USDT.`);
       return;
     }
 
@@ -89,9 +91,9 @@ export function DepositModal({
       const updated = await onRefreshProfile();
       if (Number.parseFloat(updated.balance) > startBalance.current + 0.001) {
         setPaid(true);
-        showToast('Depósito acreditado en tu billetera', 'success');
+        showToast('Depósito acreditado con éxito', 'success');
       } else {
-        showToast('Todavía no aparece el pago. Espera unos segundos y vuelve a comprobar.', 'warn');
+        showToast('Aún no se detecta el pago. Espera unos segundos y vuelve a consultar.', 'warn');
       }
     } catch (checkError) {
       setError(errorMessage(checkError));
@@ -112,41 +114,43 @@ export function DepositModal({
 
   return (
     <Modal
-      title="Recargar con Binance Pay"
-      subtitle={`Comisión única del ${feePercent}% al recargar. El 100% del pozo se reparte dentro de los mercados.`}
-      icon={<QrCode className="h-4 w-4 text-[#00f090]" />}
+      title="Recargar saldo"
+      subtitle="Acredita USDT al instante en tu cuenta mediante Binance Pay."
+      icon={<QrCode className="h-5 w-5 text-[#00f090]" />}
       onClose={onClose}
     >
       {paid ? (
-        <div className="py-6 text-center">
-          <CheckCircle2 className="mx-auto mb-3 h-8 w-8 text-[#00f090]" />
-          <h3 className="text-sm font-bold text-white">Saldo acreditado</h3>
-          <p className="mt-1 text-xs text-slate-400">
-            Tu nuevo saldo es ${formatUsdt((Number.parseFloat(profile.balance) || 0).toString())} USDT.
+        <div className="py-8 text-center">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#00f090]/15 text-[#00f090]">
+            <CheckCircle2 className="h-8 w-8" />
+          </div>
+          <h3 className="text-lg font-bold text-white">¡Recarga completada!</h3>
+          <p className="mt-1.5 text-sm text-slate-400">
+            Tu saldo disponible ahora es{' '}
+            <strong className="font-mono text-white">${formatUsdt((Number.parseFloat(profile.balance) || 0).toString())} USDT</strong>.
           </p>
           <button
             type="button"
             onClick={onClose}
-            className="mt-4 w-full rounded bg-[#00f090] py-2 text-xs font-bold text-black transition hover:bg-[#00d681]"
+            className="mt-6 w-full rounded-xl bg-[#00f090] py-3 text-sm font-bold text-slate-950 transition hover:bg-[#00d681]"
           >
             Continuar
           </button>
         </div>
       ) : order ? (
-        <div className="space-y-3">
-          <div className="rounded border border-[#00f090]/25 bg-[#121f18] p-3">
-            <div className="text-[11px] font-bold text-white">
-              Orden creada por ${formatUsdt(gross)} USDT
+        <div className="space-y-4">
+          <div className="rounded-xl border border-[#00f090]/30 bg-[#00f090]/10 p-3.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-white">Orden generada</span>
+              <span className="font-mono font-bold text-[#00f090]">${formatUsdt(gross)} USDT</span>
             </div>
-            <div className="mt-1 text-[10px] leading-relaxed text-slate-400">
-              Se acreditarán <strong className="text-[#00f090]">${formatUsdt(net)} USDT</strong> en
-              tu saldo después de la comisión de ${formatUsdt(fee)} USDT. La acreditación es
-              automática cuando Binance confirma el pago.
-            </div>
+            <p className="mt-1 text-xs text-slate-300">
+              Recibirás <strong className="font-mono text-white">${formatUsdt(net)} USDT</strong> netos en tu saldo una vez confirmado el pago.
+            </p>
           </div>
 
           {order.qrcodeLink && !qrError ? (
-            <div className="flex justify-center rounded border border-[#222736] bg-white p-3">
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-[#1e2330] bg-white p-4">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={order.qrcodeLink}
@@ -154,106 +158,127 @@ export function DepositModal({
                 className="h-48 w-48 object-contain"
                 onError={() => setQrError(true)}
               />
+              <span className="mt-2 text-xs font-medium text-slate-700">
+                Escanea con tu aplicación de Binance
+              </span>
             </div>
           ) : null}
 
-          <div className="space-y-1 rounded border border-[#1d222e] bg-[#0c0e14] p-2.5 text-[10px]">
+          <div className="space-y-2 rounded-xl border border-[#1e2330] bg-[#141822]/60 p-3.5 text-xs">
             <div className="flex justify-between text-slate-400">
-              <span>Monto bruto:</span>
-              <span className="text-white">${formatUsdt(gross)} USDT</span>
+              <span>Monto enviado:</span>
+              <span className="font-mono text-white">${formatUsdt(gross)} USDT</span>
             </div>
-            <div className="flex justify-between text-slate-500">
-              <span>Comisión de recarga ({feePercent}%):</span>
-              <span>-${formatUsdt(fee)} USDT</span>
+            <div className="flex justify-between text-slate-400">
+              <span>Comisión de servicio ({feePercent}%):</span>
+              <span className="font-mono text-slate-400">-${formatUsdt(fee)} USDT</span>
             </div>
-            <div className="flex justify-between border-t border-[#1e2330] pt-1 font-bold text-white">
-              <span>Acreditas:</span>
-              <span className="text-[#00f090]">${formatUsdt(net)} USDT</span>
+            <div className="flex justify-between border-t border-[#1e2330] pt-2 font-bold text-white">
+              <span>Acreditas en cuenta:</span>
+              <span className="font-mono text-[#00f090]">${formatUsdt(net)} USDT</span>
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-2 rounded border border-[#222736] bg-[#141822] px-2.5 py-2 text-[10px]">
-            <span className="truncate text-slate-500">Ref: {order.tradeNo}</span>
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-[#1e2330] bg-[#141822] px-3.5 py-2.5 text-xs">
+            <div className="min-w-0">
+              <span className="block text-[11px] text-slate-500">Referencia de orden</span>
+              <span className="font-mono text-xs font-semibold text-slate-300 truncate block">{order.tradeNo}</span>
+            </div>
             <button
               type="button"
               onClick={copyReference}
-              className="shrink-0 rounded p-1 text-slate-400 transition hover:text-white"
-              aria-label="Copiar referencia"
+              className="flex items-center gap-1.5 rounded-lg border border-[#2d3447] bg-[#1c2230] px-2.5 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-[#252c3e] hover:text-white"
             >
               <Copy className="h-3.5 w-3.5" />
+              Copiar
             </button>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2.5 sm:grid-cols-2">
             {order.universalUrl || order.checkoutUrl ? (
               <a
                 href={order.universalUrl ?? order.checkoutUrl ?? '#'}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center justify-center gap-1.5 rounded bg-[#00f090] py-2 text-xs font-bold text-black transition hover:bg-[#00d681]"
+                className="flex items-center justify-center gap-2 rounded-xl bg-[#00f090] py-2.5 text-xs font-bold text-slate-950 transition hover:bg-[#00d681]"
               >
-                <ExternalLink className="h-3.5 w-3.5" />
-                Abrir Binance Pay
+                <ExternalLink className="h-4 w-4" />
+                Pagar en Binance Pay
               </a>
             ) : null}
             <button
               type="button"
               onClick={checkManually}
               disabled={checking}
-              className="flex items-center justify-center gap-1.5 rounded border border-[#2d3447] bg-[#161a24] py-2 text-xs font-bold text-white transition hover:bg-[#1e2330] disabled:opacity-60"
+              className="flex items-center justify-center gap-2 rounded-xl border border-[#2d3447] bg-[#161a24] py-2.5 text-xs font-bold text-white transition hover:bg-[#1e2330] disabled:opacity-60"
             >
-              {checking ? <Spinner /> : <RefreshCw className="h-3.5 w-3.5" />}
-              Ya pagué / comprobar
+              {checking ? <Spinner /> : <RefreshCw className="h-4 w-4" />}
+              Ya pagué / Comprobar
             </button>
           </div>
 
           {error ? (
-            <div className="rounded border border-[#f43f5e]/35 bg-[#1f1113] px-2.5 py-2 text-[10px] text-[#fda4af]">
+            <div className="rounded-xl border border-[#f43f5e]/30 bg-[#f43f5e]/10 p-3 text-xs text-[#fda4af]">
               {error}
             </div>
           ) : null}
-
-          <p className="text-[9px] leading-relaxed text-slate-600">
-            Si cierras esta ventana, el pago igualmente se acreditará cuando Binance envíe el
-            webhook. No compartas el enlace de pago.
-          </p>
         </div>
       ) : (
-        <form onSubmit={createOrder} className="space-y-3">
+        <form onSubmit={createOrder} className="space-y-4">
           <div>
-            <label htmlFor="deposit-amount" className="mb-1 block text-[11px] font-bold text-slate-300">
-              Monto a enviar (USDT)
+            <label htmlFor="deposit-amount" className="mb-1.5 block text-xs font-semibold text-slate-300">
+              Monto a recargar (USDT)
             </label>
-            <input
-              id="deposit-amount"
-              type="number"
-              inputMode="decimal"
-              min={DEPOSIT_MIN}
-              max={DEPOSIT_MAX}
-              step="0.5"
-              value={amount}
-              onChange={(event) => setAmount(event.target.value)}
-              className="w-full rounded border border-[#222736] bg-[#090a0f] px-3 py-2 text-white focus:border-[#00f090] focus:outline-none"
-            />
+            <div className="relative">
+              <input
+                id="deposit-amount"
+                type="number"
+                inputMode="decimal"
+                min={DEPOSIT_MIN}
+                max={DEPOSIT_MAX}
+                step="0.5"
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+                className="w-full rounded-xl border border-[#222736] bg-[#090a0f] px-3.5 py-2.5 font-mono text-sm text-white focus:border-[#00f090] focus:outline-none"
+              />
+              <span className="absolute right-3.5 top-2.5 text-xs font-bold text-slate-500">USDT</span>
+            </div>
           </div>
 
-          <div className="space-y-1 rounded border border-[#1d222e] bg-[#0c0e14] p-2.5 text-[11px]">
+          <div className="flex flex-wrap gap-2">
+            {PRESET_AMOUNTS.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => setAmount(preset.toFixed(2))}
+                className={`rounded-lg border px-3 py-1 text-xs font-medium transition ${
+                  Number.parseFloat(amount) === preset
+                    ? 'border-[#00f090] bg-[#00f090]/15 text-[#00f090]'
+                    : 'border-[#222736] bg-[#141822] text-slate-400 hover:border-slate-600 hover:text-white'
+                }`}
+              >
+                ${preset} USDT
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-2 rounded-xl border border-[#1e2330] bg-[#141822]/60 p-3.5 text-xs">
             <div className="flex justify-between text-slate-400">
               <span>Monto bruto:</span>
-              <span className="text-white">${formatUsdt(gross)} USDT</span>
+              <span className="font-mono text-white">${formatUsdt(gross)} USDT</span>
             </div>
-            <div className="flex justify-between text-slate-500">
-              <span>Comisión de recarga ({feePercent}%):</span>
-              <span>-${formatUsdt(fee)} USDT</span>
+            <div className="flex justify-between text-slate-400">
+              <span>Comisión de servicio ({feePercent}%):</span>
+              <span className="font-mono text-slate-400">-${formatUsdt(fee)} USDT</span>
             </div>
-            <div className="flex justify-between border-t border-[#1e2330] pt-1 font-bold text-white">
-              <span>Acreditas en saldo:</span>
-              <span className="text-[#00f090]">${formatUsdt(net)} USDT</span>
+            <div className="flex justify-between border-t border-[#1e2330] pt-2 font-bold text-white">
+              <span>Acreditas en tu saldo:</span>
+              <span className="font-mono text-[#00f090]">${formatUsdt(net)} USDT</span>
             </div>
           </div>
 
           {error ? (
-            <div className="rounded border border-[#f43f5e]/35 bg-[#1f1113] px-2.5 py-2 text-[10px] text-[#fda4af]">
+            <div className="rounded-xl border border-[#f43f5e]/30 bg-[#f43f5e]/10 p-3 text-xs text-[#fda4af]">
               {error}
             </div>
           ) : null}
@@ -261,15 +286,14 @@ export function DepositModal({
           <button
             type="submit"
             disabled={loading}
-            className="flex w-full items-center justify-center gap-2 rounded bg-[#00f090] py-2 text-xs font-bold text-black transition hover:bg-[#00d681] disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#00f090] py-3 text-sm font-bold text-slate-950 transition hover:bg-[#00d681] disabled:opacity-60"
           >
-            {loading ? <Spinner /> : <QrCode className="h-4 w-4" />}
-            {loading ? 'Generando orden…' : 'Generar orden Binance Pay'}
+            {loading ? <Spinner className="text-black" /> : <QrCode className="h-4 w-4 text-black" />}
+            {loading ? 'Generando orden…' : 'Continuar con Binance Pay'}
           </button>
 
-          <p className="text-[9px] leading-relaxed text-slate-600">
-            Depósito mínimo ${formatUsdt(DEPOSIT_MIN)} y máximo ${formatUsdt(DEPOSIT_MAX)} USDT por
-            transacción. El saldo se acredita automáticamente tras la confirmación de Binance.
+          <p className="text-center text-[11px] text-slate-500">
+            Mínimo ${formatUsdt(DEPOSIT_MIN)} y máximo ${formatUsdt(DEPOSIT_MAX)} USDT. Acreditación automática.
           </p>
         </form>
       )}

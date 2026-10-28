@@ -1,87 +1,91 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarClock, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { CalendarClock, Plus, Trash2, X } from 'lucide-react';
 import { apiFetch, errorMessage } from '@/lib/api-client';
-import {
-  MARKET_CATEGORIES,
-  MARKET_CATEGORY_LABELS,
-  MAX_MARKET_DAYS,
-  MAX_OPTIONS,
-  MIN_OPTIONS,
-} from '@/lib/constants';
+import { MAX_MARKET_DAYS, MAX_OPTIONS, MIN_OPTIONS } from '@/lib/constants';
 import { toDateTimeLocal } from '@/lib/format';
-import type { MarketCategory } from '@/lib/types';
+import type { CreateMarketResponse } from '@/lib/types';
 import { Modal, Spinner } from './ui';
 
-interface CreateMarketResponse {
-  success: boolean;
-  message: string;
-  market: {
-    id: string;
-    title: string;
-    close_time: string;
-    status: string;
-  };
-}
-
-function defaultCloseTime(): string {
-  return toDateTimeLocal(new Date(Date.now() + 24 * 60 * 60 * 1000));
-}
-
 export function CreateMarketModal({
+  availableCategories = [],
   onClose,
   onCreated,
   showToast,
 }: {
+  availableCategories?: string[];
   onClose: () => void;
   onCreated: () => Promise<void> | void;
   showToast: (message: string, type?: 'success' | 'warn' | 'error') => void;
 }) {
+  const defaultCloseTime = () => {
+    const next = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    return toDateTimeLocal(next);
+  };
+
+  // Default suggested chips if no markets are open yet
+  const categoryChips = availableCategories.length > 0
+    ? availableCategories
+    : ['FÚTBOL', 'BÉISBOL', 'CAMPUS', 'GAMING'];
+
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [resolutionSource, setResolutionSource] = useState('');
-  const [category, setCategory] = useState<MarketCategory>('CAMPUS');
+  const [category, setCategory] = useState(categoryChips[0] ?? 'GENERAL');
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [customCategoryInput, setCustomCategoryInput] = useState('');
   const [options, setOptions] = useState<string[]>(['', '']);
   const [closeTime, setCloseTime] = useState(defaultCloseTime);
+  const [description, setDescription] = useState('');
+  const [resolutionSource, setResolutionSource] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const updateOption = (index: number, value: string) => {
-    setOptions((current) => current.map((option, i) => (i === index ? value : option)));
+    setOptions((current) => current.map((opt, i) => (i === index ? value : opt)));
   };
 
   const addOption = () => {
-    setOptions((current) => (current.length >= MAX_OPTIONS ? current : [...current, '']));
+    if (options.length < MAX_OPTIONS) {
+      setOptions((current) => [...current, '']);
+    }
   };
 
   const removeOption = (index: number) => {
-    setOptions((current) =>
-      current.length <= MIN_OPTIONS ? current : current.filter((_, i) => i !== index)
-    );
+    if (options.length > MIN_OPTIONS) {
+      setOptions((current) => current.filter((_, i) => i !== index));
+    }
   };
+
+  const effectiveCategory = (isCustomCategory ? customCategoryInput : category).trim().toUpperCase();
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
 
-    const cleanOptions = options.map((option) => option.trim()).filter(Boolean);
     if (title.trim().length < 5) {
-      setError('El título debe tener al menos 5 caracteres.');
+      setError('El título del evento debe tener al menos 5 caracteres.');
       return;
     }
+
+    if (effectiveCategory.length < 2) {
+      setError('Escribe o selecciona una categoría para el evento.');
+      return;
+    }
+
+    const cleanOptions = options.map((opt) => opt.trim()).filter((opt) => opt.length > 0);
     if (cleanOptions.length < MIN_OPTIONS) {
-      setError('Necesitas al menos 2 opciones con texto.');
+      setError(`Debes incluir al menos ${MIN_OPTIONS} opciones de resultado.`);
       return;
     }
-    if (new Set(cleanOptions.map((option) => option.toLocaleLowerCase('es'))).size !== cleanOptions.length) {
-      setError('Las opciones no pueden repetirse.');
+
+    if (new Set(cleanOptions.map((opt) => opt.toLowerCase())).size !== cleanOptions.length) {
+      setError('Las opciones no pueden estar duplicadas.');
       return;
     }
 
     const closeDate = new Date(closeTime);
     if (Number.isNaN(closeDate.getTime())) {
-      setError('Selecciona una fecha de cierre válida.');
+      setError('Fecha de cierre inválida.');
       return;
     }
     if (closeDate.getTime() < Date.now() + 60_000) {
@@ -89,7 +93,7 @@ export function CreateMarketModal({
       return;
     }
     if (closeDate.getTime() > Date.now() + MAX_MARKET_DAYS * 86_400_000) {
-      setError(`La fecha de cierre no puede superar ${MAX_MARKET_DAYS} días.`);
+      setError(`La fecha no puede superar los ${MAX_MARKET_DAYS} días.`);
       return;
     }
 
@@ -99,15 +103,15 @@ export function CreateMarketModal({
         method: 'POST',
         body: JSON.stringify({
           title: title.trim(),
-          description: description.trim() || undefined,
-          resolutionSource: resolutionSource.trim() || undefined,
-          category,
+          category: effectiveCategory,
           options: cleanOptions,
           closeTime: closeDate.toISOString(),
+          description: description.trim() || undefined,
+          resolutionSource: resolutionSource.trim() || undefined,
         }),
       });
 
-      showToast(response.message || 'Mercado creado con éxito', 'success');
+      showToast(response.message || 'Evento creado con éxito', 'success');
       await onCreated();
       onClose();
     } catch (createError) {
@@ -118,160 +122,154 @@ export function CreateMarketModal({
   };
 
   return (
-    <Modal
-      title="Crear mercado"
-      subtitle="Define la pregunta, las opciones y cuándo se cierra. El creador recibe el 30% si gana una opción sin apuestas."
-      icon={<Sparkles className="h-4 w-4 text-[#00f090]" />}
-      onClose={onClose}
-      wide
-    >
+    <Modal title="Crear nuevo evento" onClose={onClose}>
       <form onSubmit={submit} className="space-y-4">
+        {/* Título */}
         <div>
-          <label htmlFor="market-title" className="mb-1 block text-[11px] font-bold text-slate-300">
-            Pregunta del mercado
+          <label htmlFor="market-title" className="mb-1 block text-xs font-bold text-slate-300">
+            Título o pregunta
           </label>
           <input
             id="market-title"
             type="text"
             value={title}
-            onChange={(event) => setTitle(event.target.value)}
+            onChange={(e) => setTitle(e.target.value)}
             maxLength={200}
-            placeholder="¿Quién gana el clásico universitario?"
-            className="w-full rounded border border-[#222736] bg-[#090a0f] px-3 py-2 text-sm text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none"
+            required
+            className="w-full rounded-lg border border-[#2d3447] bg-[#0c0d12] px-3 py-2 text-sm text-white focus:border-[#00f090] focus:outline-none"
+            placeholder="Ej: ¿Quién gana el clásico universitario?"
           />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label
-              htmlFor="market-category"
-              className="mb-1 block text-[11px] font-bold text-slate-300"
-            >
-              Categoría
-            </label>
-            <select
-              id="market-category"
-              value={category}
-              onChange={(event) => setCategory(event.target.value as MarketCategory)}
-              className="w-full rounded border border-[#222736] bg-[#090a0f] px-3 py-2 text-sm text-white focus:border-[#00f090] focus:outline-none"
-            >
-              {MARKET_CATEGORIES.map((item) => (
-                <option key={item} value={item}>
-                  {MARKET_CATEGORY_LABELS[item]}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label
-              htmlFor="market-close"
-              className="mb-1 flex items-center justify-between text-[11px] font-bold text-slate-300"
-            >
-              <span className="flex items-center gap-1">
-                <CalendarClock className="h-3 w-3" /> Inicio del evento (Cierre de apuestas)
-              </span>
-              <span className="font-normal text-[10px] text-slate-500">Hora local (UTC-4)</span>
-            </label>
-            <input
-              id="market-close"
-              type="datetime-local"
-              value={closeTime}
-              onChange={(event) => setCloseTime(event.target.value)}
-              className="w-full rounded border border-[#222736] bg-[#090a0f] px-3 py-2 text-sm text-white focus:border-[#00f090] focus:outline-none"
-            />
-            <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-              Las apuestas cierran al comenzar el evento para evitar ventajas por juego en curso (anti court-siding).
-            </p>
-          </div>
-        </div>
-
+        {/* Categoría Dinámica */}
         <div>
-          <label
-            htmlFor="market-description"
-            className="mb-1 block text-[11px] font-bold text-slate-300"
-          >
-            Descripción <span className="font-normal text-slate-500">(opcional)</span>
+          <label className="mb-1.5 block text-xs font-bold text-slate-300">
+            Categoría
           </label>
-          <textarea
-            id="market-description"
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            maxLength={1000}
-            rows={2}
-            placeholder="Contexto y condiciones para validar el resultado."
-            className="w-full resize-none rounded border border-[#222736] bg-[#090a0f] px-3 py-2 text-sm text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none"
-          />
-        </div>
-
-        <div>
-          <div className="mb-1 flex items-center justify-between">
-            <div>
-              <span className="text-[11px] font-bold text-slate-300">
-                Opciones ({MIN_OPTIONS}-{MAX_OPTIONS})
-              </span>
-              <span className="block text-[9px] text-slate-500">
-                En deportes que admiten empate (ej. fútbol), añade la opción &quot;Empate&quot;.
-              </span>
-            </div>
+          <div className="flex flex-wrap gap-1.5">
+            {categoryChips.map((cat) => {
+              const active = !isCustomCategory && category === cat;
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => {
+                    setCategory(cat);
+                    setIsCustomCategory(false);
+                  }}
+                  className={`rounded-lg border px-3 py-1 text-xs font-semibold transition ${
+                    active
+                      ? 'border-[#00f090] bg-[#00f090]/15 text-[#00f090]'
+                      : 'border-[#2d3447] bg-[#141822] text-slate-300 hover:border-slate-500'
+                  }`}
+                >
+                  {cat}
+                </button>
+              );
+            })}
             <button
               type="button"
-              onClick={addOption}
-              disabled={options.length >= MAX_OPTIONS}
-              className="flex items-center gap-1 rounded border border-[#2d3447] bg-[#161a24] px-2 py-1 text-[10px] font-bold text-slate-200 transition hover:bg-[#1e2330] disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => setIsCustomCategory(true)}
+              className={`rounded-lg border px-3 py-1 text-xs font-semibold transition ${
+                isCustomCategory
+                  ? 'border-[#00f090] bg-[#00f090]/15 text-[#00f090]'
+                  : 'border-[#2d3447] bg-[#141822] text-slate-300 hover:border-slate-500'
+              }`}
             >
-              <Plus className="h-3 w-3" /> Añadir opción
+              + Personalizada
             </button>
           </div>
+
+          {isCustomCategory ? (
+            <input
+              type="text"
+              value={customCategoryInput}
+              onChange={(e) => setCustomCategoryInput(e.target.value.toUpperCase())}
+              maxLength={30}
+              autoFocus
+              className="mt-2 w-full rounded-lg border border-[#00f090]/50 bg-[#0c0d12] px-3 py-2 text-xs font-bold text-white focus:border-[#00f090] focus:outline-none"
+              placeholder="Escribe el nombre de la categoría (Ej: POLÍTICA, FIESTA...)"
+            />
+          ) : null}
+        </div>
+
+        {/* Opciones */}
+        <div>
+          <div className="mb-1.5 flex items-center justify-between">
+            <label className="text-xs font-bold text-slate-300">
+              Opciones de resultado
+            </label>
+            {options.length < MAX_OPTIONS ? (
+              <button
+                type="button"
+                onClick={addOption}
+                className="flex items-center gap-1 text-xs font-semibold text-[#00f090] hover:underline"
+              >
+                <Plus className="h-3.5 w-3.5" /> Agregar opción
+              </button>
+            ) : null}
+          </div>
+
           <div className="space-y-2">
-            {options.map((option, index) => (
-              <div key={index} className="flex items-center gap-2">
-                <span className="w-5 shrink-0 text-center font-mono text-[10px] text-slate-500">
-                  {index + 1}
-                </span>
+            {options.map((opt, i) => (
+              <div key={i} className="flex items-center gap-2">
                 <input
                   type="text"
-                  value={option}
-                  onChange={(event) => updateOption(index, event.target.value)}
+                  value={opt}
+                  onChange={(e) => updateOption(i, e.target.value)}
                   maxLength={50}
-                  placeholder={index === 0 ? 'Equipo A' : index === 1 ? 'Equipo B' : 'Otra opción'}
-                  aria-label={`Opción ${index + 1}`}
-                  className="w-full rounded border border-[#222736] bg-[#090a0f] px-3 py-2 text-sm text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none"
+                  className="flex-1 rounded-lg border border-[#2d3447] bg-[#0c0d12] px-3 py-2 text-xs text-white focus:border-[#00f090] focus:outline-none"
+                  placeholder={`Opción ${i + 1}`}
+                  required
                 />
-                <button
-                  type="button"
-                  onClick={() => removeOption(index)}
-                  disabled={options.length <= MIN_OPTIONS}
-                  className="shrink-0 rounded border border-[#2d3447] bg-[#161a24] p-2 text-slate-400 transition hover:border-[#f43f5e]/40 hover:text-[#f43f5e] disabled:cursor-not-allowed disabled:opacity-30"
-                  aria-label={`Eliminar opción ${index + 1}`}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                {options.length > MIN_OPTIONS ? (
+                  <button
+                    type="button"
+                    onClick={() => removeOption(i)}
+                    className="p-1.5 text-slate-500 transition hover:text-red-400"
+                    aria-label="Eliminar opción"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                ) : null}
               </div>
             ))}
           </div>
         </div>
 
+        {/* Cierre de apuestas */}
         <div>
-          <label
-            htmlFor="market-source"
-            className="mb-1 block text-[11px] font-bold text-slate-300"
-          >
-            Fuente de resolución <span className="font-normal text-slate-500">(opcional)</span>
+          <label htmlFor="market-close" className="mb-1 block text-xs font-bold text-slate-300">
+            Fecha y hora de inicio (Cierre de apuestas)
           </label>
           <input
-            id="market-source"
+            id="market-close"
+            type="datetime-local"
+            value={closeTime}
+            onChange={(e) => setCloseTime(e.target.value)}
+            className="w-full rounded-lg border border-[#2d3447] bg-[#0c0d12] px-3 py-2 text-xs text-white focus:border-[#00f090] focus:outline-none"
+            required
+          />
+        </div>
+
+        {/* Detalles opcionales */}
+        <div>
+          <label htmlFor="market-desc" className="mb-1 block text-xs font-bold text-slate-300">
+            Detalles o condiciones (opcional)
+          </label>
+          <input
+            id="market-desc"
             type="text"
-            value={resolutionSource}
-            onChange={(event) => setResolutionSource(event.target.value)}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
             maxLength={300}
-            placeholder="Ej: marcador oficial de la liga, cuenta de Instagram del evento…"
-            className="w-full rounded border border-[#222736] bg-[#090a0f] px-3 py-2 text-xs text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none"
+            className="w-full rounded-lg border border-[#2d3447] bg-[#0c0d12] px-3 py-2 text-xs text-white focus:border-[#00f090] focus:outline-none"
+            placeholder="Condiciones específicas para certificar el ganador..."
           />
         </div>
 
         {error ? (
-          <div className="rounded border border-[#f43f5e]/35 bg-[#1f1113] px-3 py-2 text-[11px] leading-relaxed text-[#fda4af]">
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-400">
             {error}
           </div>
         ) : null}
@@ -279,10 +277,10 @@ export function CreateMarketModal({
         <button
           type="submit"
           disabled={loading}
-          className="flex w-full items-center justify-center gap-2 rounded bg-[#00f090] py-2.5 text-xs font-bold text-black transition hover:bg-[#00d681] disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#00f090] py-2.5 text-sm font-bold text-black transition hover:bg-[#00d681] disabled:opacity-50"
         >
-          {loading ? <Spinner /> : <Sparkles className="h-4 w-4" />}
-          {loading ? 'Creando mercado…' : 'Publicar mercado'}
+          {loading ? <Spinner className="h-4 w-4" /> : null}
+          {loading ? 'Publicando…' : 'Publicar evento'}
         </button>
       </form>
     </Modal>

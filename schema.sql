@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS public.markets (
     title TEXT NOT NULL CONSTRAINT markets_title_length CHECK (char_length(title) BETWEEN 5 AND 255),
     description TEXT,
     resolution_source TEXT,
-    category TEXT NOT NULL DEFAULT 'CAMPUS' CONSTRAINT markets_category_valid CHECK (category IN ('FUTBOL', 'BEISBOL', 'CAMPUS', 'GAMING', 'OTRO')),
+    category TEXT NOT NULL DEFAULT 'GENERAL' CONSTRAINT markets_category_valid CHECK (char_length(trim(category)) BETWEEN 2 AND 30),
     options JSONB NOT NULL CONSTRAINT markets_options_shape CHECK (
         jsonb_typeof(options) = 'array'
         AND jsonb_array_length(options) BETWEEN 2 AND 10
@@ -124,7 +124,7 @@ ALTER TABLE public.markets DROP CONSTRAINT IF EXISTS markets_options_shape;
 ALTER TABLE public.markets DROP CONSTRAINT IF EXISTS markets_status_valid;
 ALTER TABLE public.markets DROP CONSTRAINT IF EXISTS markets_pool_non_negative;
 ALTER TABLE public.markets ADD CONSTRAINT markets_title_length CHECK (char_length(title) BETWEEN 5 AND 255);
-ALTER TABLE public.markets ADD CONSTRAINT markets_category_valid CHECK (category IN ('FUTBOL', 'BEISBOL', 'CAMPUS', 'GAMING', 'OTRO'));
+ALTER TABLE public.markets ADD CONSTRAINT markets_category_valid CHECK (char_length(trim(category)) BETWEEN 2 AND 30);
 ALTER TABLE public.markets ADD CONSTRAINT markets_options_shape CHECK (
     jsonb_typeof(options) = 'array'
     AND jsonb_array_length(options) BETWEEN 2 AND 10

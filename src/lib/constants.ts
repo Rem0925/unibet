@@ -11,15 +11,7 @@ export const MIN_OPTIONS = 2;
 export const MAX_OPTIONS = 10;
 export const MAX_MARKET_DAYS = 365;
 
-export const MARKET_CATEGORIES = ['FUTBOL', 'BEISBOL', 'CAMPUS', 'GAMING', 'OTRO'] as const;
-
-export const MARKET_CATEGORY_LABELS: Record<(typeof MARKET_CATEGORIES)[number], string> = {
-  FUTBOL: 'FÚTBOL',
-  BEISBOL: 'BÉISBOL',
-  CAMPUS: 'UNIVERSIDAD',
-  GAMING: 'GAMING',
-  OTRO: 'OTRO',
-};
+export const DEFAULT_CATEGORY_SUGGESTIONS = ['FÚTBOL', 'BÉISBOL', 'CAMPUS', 'GAMING', 'POLÍTICA', 'MÚSICA'] as const;
 
 export const ROLE_LABELS = {
   ADMIN: 'ADMIN',

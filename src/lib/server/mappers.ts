@@ -141,13 +141,8 @@ export function asMarketStatus(value: string): MarketStatus {
 }
 
 export function asMarketCategory(value: string): MarketCategory {
-  return value === 'FUTBOL' ||
-    value === 'BEISBOL' ||
-    value === 'CAMPUS' ||
-    value === 'GAMING' ||
-    value === 'OTRO'
-    ? value
-    : 'OTRO';
+  const clean = value?.trim().toUpperCase();
+  return clean && clean.length >= 2 ? clean.slice(0, 30) : 'GENERAL';
 }
 
 export function asBetStatus(value: string): BetStatus {

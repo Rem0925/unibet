@@ -5,49 +5,40 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
+  Flame,
   Info,
+  Plus,
   Search,
   Sparkles,
   Trophy,
   X,
 } from 'lucide-react';
+import { AccountView } from '@/components/AccountView';
 import { AdminDashboard } from '@/components/AdminDashboard';
 import { BetSlip } from '@/components/BetSlip';
 import { CreateMarketModal } from '@/components/CreateMarketModal';
 import { DepositModal } from '@/components/DepositModal';
 import { CancelMarketModal, ResolveMarketModal } from '@/components/MarketActions';
 import { MarketCard } from '@/components/MarketCard';
-import { MobileNav, Header } from '@/components/Navigation';
 import { ModerationPanel } from '@/components/ModerationPanel';
-import { MyBets } from '@/components/MyBets';
+import { Header, MobileNav } from '@/components/Navigation';
 import { EmptyState, ErrorBanner } from '@/components/ui';
-import { WalletView } from '@/components/WalletView';
 import { WithdrawModal } from '@/components/WithdrawModal';
 import { apiFetch, errorMessage } from '@/lib/api-client';
-import { MARKET_CATEGORIES, MARKET_CATEGORY_LABELS } from '@/lib/constants';
 import { formatUsdt } from '@/lib/format';
 import type {
   AdminOverview,
   AppTab,
-  BetsResponse,
   BetRecord,
-  MarketCategory,
   MarketsResponse,
   MarketSummary,
+  ToastItem,
+  ToastType,
   TransactionRecord,
-  TransactionsResponse,
   UserProfile,
 } from '@/lib/types';
 
-type StatusFilter = 'PLAYING' | 'OPEN' | 'CLOSED' | 'RESOLVED' | 'CANCELLED' | 'ALL';
-type CategoryFilter = 'TODOS' | MarketCategory;
-type ToastType = 'success' | 'warn' | 'error';
-
-interface ToastItem {
-  id: number;
-  message: string;
-  type: ToastType;
-}
+type StatusFilter = 'PLAYING' | 'OPEN' | 'CLOSED' | 'RESOLVED' | 'ALL';
 
 interface BetSlipState {
   marketId: string;
@@ -55,19 +46,11 @@ interface BetSlipState {
 }
 
 const statusFilters: Array<{ id: StatusFilter; label: string }> = [
-  { id: 'PLAYING', label: 'EN JUEGO' },
-  { id: 'OPEN', label: 'ABIERTOS' },
-  { id: 'CLOSED', label: 'EN CURSO' },
-  { id: 'RESOLVED', label: 'FINALIZADOS' },
-  { id: 'CANCELLED', label: 'CANCELADOS' },
-  { id: 'ALL', label: 'TODOS' },
+  { id: 'PLAYING', label: 'En juego' },
+  { id: 'OPEN', label: 'Abiertos' },
+  { id: 'CLOSED', label: 'En curso' },
+  { id: 'RESOLVED', label: 'Finalizados' },
 ];
-
-const toastStyles: Record<ToastType, string> = {
-  success: 'border-[#00f090]/40 bg-[#121f18] text-[#00f090]',
-  warn: 'border-[#f59e0b]/40 bg-[#181511] text-[#fbbf24]',
-  error: 'border-[#f43f5e]/40 bg-[#1f1113] text-[#fda4af]',
-};
 
 export function Terminal({
   profile,
@@ -83,20 +66,19 @@ export function Terminal({
   const [bets, setBets] = useState<BetRecord[]>([]);
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
   const [adminOverview, setAdminOverview] = useState<AdminOverview | null>(null);
+
   const [marketsLoading, setMarketsLoading] = useState(true);
   const [betsLoading, setBetsLoading] = useState(true);
   const [walletLoading, setWalletLoading] = useState(true);
   const [adminLoading, setAdminLoading] = useState(true);
+
   const [marketsError, setMarketsError] = useState<string | null>(null);
-  const [betsError, setBetsError] = useState<string | null>(null);
-  const [walletError, setWalletError] = useState<string | null>(null);
   const [adminError, setAdminError] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('TODOS');
+  const [categoryFilter, setCategoryFilter] = useState<string>('TODOS');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('PLAYING');
 
   const [betSlip, setBetSlip] = useState<BetSlipState | null>(null);
@@ -126,7 +108,6 @@ export function Terminal({
     try {
       const response = await apiFetch<MarketsResponse>('/api/markets');
       setMarkets(response.markets);
-      setLastUpdated(new Date());
       setMarketsError(null);
     } catch (loadError) {
       setMarketsError(errorMessage(loadError));
@@ -138,11 +119,10 @@ export function Terminal({
   const loadBets = useCallback(async (silent = false) => {
     if (!silent) setBetsLoading(true);
     try {
-      const response = await apiFetch<BetsResponse>('/api/bets/mine');
+      const response = await apiFetch<{ bets: BetRecord[] }>('/api/bets/mine');
       setBets(response.bets);
-      setBetsError(null);
-    } catch (loadError) {
-      setBetsError(errorMessage(loadError));
+    } catch {
+      // handled silently
     } finally {
       setBetsLoading(false);
     }
@@ -151,11 +131,12 @@ export function Terminal({
   const loadTransactions = useCallback(async (silent = false) => {
     if (!silent) setWalletLoading(true);
     try {
-      const response = await apiFetch<TransactionsResponse>('/api/transactions/mine');
+      const response = await apiFetch<{ transactions: TransactionRecord[] }>(
+        '/api/transactions/mine'
+      );
       setTransactions(response.transactions);
-      setWalletError(null);
-    } catch (loadError) {
-      setWalletError(errorMessage(loadError));
+    } catch {
+      // handled silently
     } finally {
       setWalletLoading(false);
     }
@@ -164,8 +145,8 @@ export function Terminal({
   const loadAdmin = useCallback(async (silent = false) => {
     if (!silent) setAdminLoading(true);
     try {
-      const response = await apiFetch<AdminOverview>('/api/admin/overview');
-      setAdminOverview(response);
+      const response = await apiFetch<{ overview: AdminOverview }>('/api/admin/overview');
+      setAdminOverview(response.overview);
       setAdminError(null);
     } catch (loadError) {
       setAdminError(errorMessage(loadError));
@@ -197,6 +178,7 @@ export function Terminal({
     return () => window.clearInterval(interval);
   }, [role, loadMarkets, loadBets, loadTransactions, loadAdmin, refreshProfile]);
 
+  // Handle return from Binance Pay
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
@@ -210,8 +192,8 @@ export function Terminal({
       }
       showToast(
         walletState === 'deposit-success'
-          ? 'Pago recibido. La acreditación automática puede tardar unos segundos.'
-          : 'Orden de recarga cancelada. No se realizó ningún cargo.',
+          ? 'Pago recibido. Tu saldo se acreditará en segundos.'
+          : 'Recarga cancelada. No se realizó ningún cobro.',
         walletState === 'deposit-success' ? 'success' : 'warn'
       );
     }, 0);
@@ -225,7 +207,7 @@ export function Terminal({
     );
 
     return () => window.clearTimeout(timer);
-  }, [showToast]);
+  }, [showToast, refreshProfile, loadTransactions]);
 
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
@@ -267,7 +249,7 @@ export function Terminal({
           amount,
         }),
       });
-      showToast(response.message || 'Apuesta registrada con éxito', 'success');
+      showToast(response.message || 'Apuesta confirmada con éxito', 'success');
       setBetSlip(null);
       await Promise.allSettled([
         refreshProfile(),
@@ -308,8 +290,20 @@ export function Terminal({
       .reduce((sum, b) => sum + (Number.parseFloat(b.amount) || 0), 0);
   }, [bets, betSlip]);
 
+  // Dynamic active categories derived strictly from open/closed markets
+  const activeCategories = useMemo(() => {
+    const set = new Set<string>();
+    for (const m of markets) {
+      if (m.category && (m.status === 'OPEN' || m.status === 'CLOSED')) {
+        set.add(m.category.toUpperCase().trim());
+      }
+    }
+    return Array.from(set).sort();
+  }, [markets]);
+
+  // Filtered markets
   const filteredMarkets = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase('es');
+    const query = search.trim().toLowerCase();
 
     const statusMatch = (market: MarketSummary) => {
       if (statusFilter === 'ALL') return true;
@@ -319,16 +313,18 @@ export function Terminal({
       return market.status === statusFilter;
     };
 
-    const categoryMatch = (market: MarketSummary) =>
-      categoryFilter === 'TODOS' || market.category === categoryFilter;
+    const categoryMatch = (market: MarketSummary) => {
+      if (categoryFilter === 'TODOS') return true;
+      return market.category.toUpperCase().trim() === categoryFilter.toUpperCase().trim();
+    };
 
     const searchMatch = (market: MarketSummary) => {
       if (!query) return true;
       return (
-        market.title.toLocaleLowerCase('es').includes(query) ||
-        (market.description ?? '').toLocaleLowerCase('es').includes(query) ||
-        market.creatorUsername.toLocaleLowerCase('es').includes(query) ||
-        market.options.some((option) => option.toLocaleLowerCase('es').includes(query))
+        market.title.toLowerCase().includes(query) ||
+        market.creatorUsername.toLowerCase().includes(query) ||
+        market.options.some((opt) => opt.toLowerCase().includes(query)) ||
+        market.category.toLowerCase().includes(query)
       );
     };
 
@@ -342,36 +338,20 @@ export function Terminal({
     return markets
       .filter((market) => statusMatch(market) && categoryMatch(market) && searchMatch(market))
       .sort((a, b) => {
-        const statusDiff = statusOrder[a.status] - statusOrder[b.status];
-        if (statusDiff !== 0) return statusDiff;
+        const diff = statusOrder[a.status] - statusOrder[b.status];
+        if (diff !== 0) return diff;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
   }, [markets, search, statusFilter, categoryFilter]);
 
-  const activePool = useMemo(
-    () =>
-      markets
-        .filter((market) => market.status === 'OPEN' || market.status === 'CLOSED')
-        .reduce((sum, market) => sum + (Number.parseFloat(market.totalPool) || 0), 0),
-    [markets]
-  );
-
-  const openCount = useMemo(
-    () => markets.filter((market) => market.status === 'OPEN').length,
-    [markets]
-  );
-
-  const activeBets = useMemo(() => bets.filter((bet) => bet.status === 'ACTIVE'), [bets]);
-  const activeBetsAmount = useMemo(
-    () => activeBets.reduce((sum, bet) => sum + (Number.parseFloat(bet.amount) || 0), 0),
-    [activeBets]
-  );
-
-  const recentBets = useMemo(() => bets.slice(0, 3), [bets]);
-  const isStaff = role === 'ADMIN' || role === 'MODERATOR';
+  const totalLivePool = useMemo(() => {
+    return markets
+      .filter((m) => m.status === 'OPEN' || m.status === 'CLOSED')
+      .reduce((sum, m) => sum + (Number.parseFloat(m.totalPool) || 0), 0);
+  }, [markets]);
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col bg-[#090a0f] text-slate-100">
       <Header
         profile={profile}
         activeTab={effectiveTab}
@@ -384,253 +364,157 @@ export function Terminal({
         refreshing={refreshing}
       />
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 pb-24 pt-5 md:pb-8">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 pb-24 pt-6 md:pb-12">
         {effectiveTab === 'EXPLORE' ? (
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_19rem]">
-            <div className="min-w-0 space-y-4">
-              <section className="rounded-lg border border-[#1e2330] bg-[#11141c] p-4">
-                <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
-                  <div>
-                    <div className="flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[#00f090]">
-                      <span className="relative flex h-2 w-2">
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#00f090] opacity-50" />
-                        <span className="relative inline-flex h-2 w-2 rounded-full bg-[#00f090]" />
-                      </span>
-                      Mercados en vivo
-                    </div>
-                    <h1 className="mt-2 text-xl font-bold tracking-tight text-white sm:text-2xl">
-                      Apuesta contra el pozo, no contra la casa
-                    </h1>
-                    <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-400">
-                      Cada opción acumula su propio pozo. Al cerrar el mercado, el 100% del
-                      dinero se reparte entre quienes acertaron.
-                    </p>
-                  </div>
-                  <div className="shrink-0 rounded border border-[#1d222e] bg-[#0c0e14] px-2.5 py-1.5 font-mono text-[9px] uppercase tracking-wide text-slate-500">
-                    <span className="text-[#00f090]">●</span> En vivo
-                    <span className="mx-1.5 text-slate-700">|</span>
-                    {lastUpdated ? lastUpdated.toLocaleTimeString('es-VE') : '—'}
-                  </div>
-                </div>
-
-                <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
-                  <HeroStat label="Mercados abiertos" value={String(openCount)} />
-                  <HeroStat
-                    label="Pozo en juego"
-                    value={`$${formatUsdt(activePool)}`}
-                    tone="text-[#00f090]"
-                  />
-                  <HeroStat
-                    label="Tus apuestas activas"
-                    value={`$${formatUsdt(activeBetsAmount)}`}
-                    hint={`${activeBets.length} tickets`}
-                  />
-                  <HeroStat
-                    label="Comisión de entrada"
-                    value="1.5%"
-                    hint="Solo al recargar"
-                    tone="text-[#fbbf24]"
+          <div className="space-y-6">
+            {/* Barra de Filtros y Búsqueda */}
+            <div className="space-y-3">
+              <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+                <div className="relative flex-1">
+                  <Search className="pointer-events-none absolute left-3.5 top-3 h-4 w-4 text-slate-500" />
+                  <input
+                    type="search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Buscar evento, opción o creador..."
+                    className="w-full rounded-xl border border-[#212633] bg-[#12151c] py-2.5 pl-10 pr-4 text-xs font-medium text-white placeholder-slate-500 focus:border-[#00f090] focus:outline-none"
                   />
                 </div>
-              </section>
 
-              <div className="space-y-2.5">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <div className="relative flex-1">
-                    <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
-                    <input
-                      type="search"
-                      value={search}
-                      onChange={(event) => setSearch(event.target.value)}
-                      placeholder="Buscar mercado, opción o creador…"
-                      className="w-full rounded border border-[#222736] bg-[#11141c] py-2 pl-9 pr-3 text-xs text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none"
-                    />
-                  </div>
-                  <select
-                    value={categoryFilter}
-                    onChange={(event) =>
-                      setCategoryFilter(event.target.value as CategoryFilter)
-                    }
-                    aria-label="Filtrar por categoría"
-                    className="rounded border border-[#222736] bg-[#11141c] px-2.5 py-2 font-mono text-[11px] font-bold text-slate-200 focus:border-[#00f090] focus:outline-none"
-                  >
-                    <option value="TODOS">TODAS LAS CATEGORÍAS</option>
-                    {MARKET_CATEGORIES.map((category) => (
-                      <option key={category} value={category}>
-                        {MARKET_CATEGORY_LABELS[category]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex flex-wrap gap-1">
-                  {statusFilters.map((filter) => (
+                {/* Filtro de Estado */}
+                <div className="flex rounded-xl border border-[#212633] bg-[#12151c] p-1">
+                  {statusFilters.map((f) => (
                     <button
-                      key={filter.id}
+                      key={f.id}
                       type="button"
-                      onClick={() => setStatusFilter(filter.id)}
-                      className={`rounded border px-2.5 py-1 font-mono text-[10px] font-bold transition ${
-                        statusFilter === filter.id
-                          ? 'border-[#00f090]/40 bg-[#121f18] text-[#00f090]'
-                          : 'border-[#222736] bg-[#11141c] text-slate-400 hover:text-white'
+                      onClick={() => setStatusFilter(f.id)}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                        statusFilter === f.id
+                          ? 'bg-[#1e2536] text-white shadow-sm'
+                          : 'text-slate-400 hover:text-white'
                       }`}
                     >
-                      {filter.label}
+                      {f.label}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {marketsError ? (
-                <ErrorBanner message={marketsError} onRetry={() => void loadMarkets()} />
-              ) : null}
+              {/* Categorías Dinámicas (Chips) */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                <button
+                  type="button"
+                  onClick={() => setCategoryFilter('TODOS')}
+                  className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                    categoryFilter === 'TODOS'
+                      ? 'border-[#00f090] bg-[#00f090]/15 text-[#00f090]'
+                      : 'border-[#212633] bg-[#12151c] text-slate-300 hover:border-slate-500'
+                  }`}
+                >
+                  Todas las categorías
+                </button>
 
-              {marketsLoading && markets.length === 0 ? (
-                <div className="grid gap-3 md:grid-cols-2">
-                  {[0, 1, 2, 3].map((item) => (
-                    <div
-                      key={item}
-                      className="h-80 animate-pulse rounded-lg border border-[#1e2330] bg-[#11141c]"
-                    />
-                  ))}
-                </div>
-              ) : filteredMarkets.length === 0 ? (
-                <EmptyState
-                  icon={<Trophy className="h-6 w-6" />}
-                  title={markets.length === 0 ? 'Todavía no hay mercados' : 'Sin resultados'}
-                  description={
-                    markets.length === 0
-                      ? 'Sé el primero en crear una predicción para tu grupo. Define el cierre y las opciones.'
-                      : 'Cambia la búsqueda o los filtros para ver otros mercados.'
-                  }
-                  action={
+                {activeCategories.map((cat) => {
+                  const active = categoryFilter.toUpperCase() === cat;
+                  return (
                     <button
+                      key={cat}
                       type="button"
-                      onClick={() => setShowCreate(true)}
-                      className="flex items-center gap-1.5 rounded bg-[#00f090] px-3 py-1.5 text-xs font-bold text-black transition hover:bg-[#00d681]"
+                      onClick={() => setCategoryFilter(cat)}
+                      className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                        active
+                          ? 'border-[#00f090] bg-[#00f090]/15 text-[#00f090]'
+                          : 'border-[#212633] bg-[#12151c] text-slate-300 hover:border-slate-500'
+                      }`}
                     >
-                      <Sparkles className="h-3.5 w-3.5" /> Crear mercado
+                      {cat}
                     </button>
-                  }
-                />
-              ) : (
-                <div className="grid gap-3 md:grid-cols-2">
-                  {filteredMarkets.map((market) => (
-                    <MarketCard key={market.id} market={market} onSelectOption={openBetSlip} />
-                  ))}
-                </div>
-              )}
+                  );
+                })}
+              </div>
             </div>
 
-            <aside className="hidden space-y-3 xl:block">
-              <section className="rounded-lg border border-[#1e2330] bg-[#11141c] p-3">
-                <h2 className="flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-wide text-white">
-                  <Info className="h-3.5 w-3.5 text-[#00f090]" /> Reglas del pozo
-                </h2>
-                <ul className="mt-2 space-y-2 font-mono text-[10px] leading-relaxed text-slate-400">
-                  <li className="flex gap-1.5">
-                    <span className="text-[#00f090]">01</span>
-                    El 100% del pozo va a los ganadores. No hay comisión dentro de los mercados.
-                  </li>
-                  <li className="flex gap-1.5">
-                    <span className="text-[#00f090]">02</span>
-                    La comisión del 1.5% se cobra una sola vez al recargar USDT.
-                  </li>
-                  <li className="flex gap-1.5">
-                    <span className="text-[#f59e0b]">03</span>
-                    Si gana una opción que nadie apostó, el creador del mercado recibe una parte
-                    del pozo.
-                  </li>
-                </ul>
-              </section>
+            {marketsError ? (
+              <ErrorBanner message={marketsError} onRetry={() => void loadMarkets()} />
+            ) : null}
 
-              <section className="rounded-lg border border-[#1e2330] bg-[#11141c] p-3">
-                <div className="flex items-center justify-between">
-                  <h2 className="flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-wide text-white">
-                    <Clock className="h-3.5 w-3.5 text-[#00f090]" /> Tus últimos tickets
-                  </h2>
+            {/* Listado de Mercados */}
+            {marketsLoading && markets.length === 0 ? (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <div
+                    key={i}
+                    className="h-64 animate-pulse rounded-xl border border-[#212633] bg-[#12151c]"
+                  />
+                ))}
+              </div>
+            ) : filteredMarkets.length === 0 ? (
+              <EmptyState
+                icon={<Trophy className="h-8 w-8 text-slate-600" />}
+                title={markets.length === 0 ? 'No hay eventos disponibles' : 'Sin resultados'}
+                description={
+                  markets.length === 0
+                    ? 'Sé el primero en crear una predicción entre amigos.'
+                    : 'Prueba con otra palabra clave o selecciona otra categoría.'
+                }
+                action={
                   <button
                     type="button"
-                    onClick={() => handleNavigate('MY_BETS')}
-                    className="font-mono text-[9px] font-bold text-[#00f090] hover:underline"
+                    onClick={() => setShowCreate(true)}
+                    className="flex items-center gap-2 rounded-lg bg-[#00f090] px-4 py-2 text-xs font-bold text-black transition hover:bg-[#00d681]"
                   >
-                    VER TODOS
+                    <Plus className="h-4 w-4" /> Crear evento
                   </button>
-                </div>
-                {recentBets.length === 0 ? (
-                  <p className="mt-2 font-mono text-[10px] leading-relaxed text-slate-500">
-                    Aún no tienes tickets. Elige una opción de un mercado para empezar.
-                  </p>
-                ) : (
-                  <div className="mt-2 space-y-2">
-                    {recentBets.map((bet) => (
-                      <div
-                        key={bet.id}
-                        className="rounded border border-[#1d222e] bg-[#0c0e14] px-2 py-1.5"
-                      >
-                        <div className="truncate text-[10px] font-bold text-slate-200">
-                          {bet.marketTitle}
-                        </div>
-                        <div className="mt-0.5 flex justify-between font-mono text-[9px] text-slate-500">
-                          <span className="text-[#00f090]">{bet.selectedOption}</span>
-                          <span>${formatUsdt(bet.amount)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </section>
-
-              <section className="rounded border border-[#f59e0b]/20 bg-[#181511] p-3 font-mono text-[9px] leading-relaxed text-[#fbbf24]">
-                <AlertTriangle className="mr-1 inline h-3 w-3" />
-                El saldo es USDT real. Apuesta solo lo que estés dispuesto a perder.
-              </section>
-            </aside>
+                }
+              />
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {filteredMarkets.map((market) => (
+                  <MarketCard key={market.id} market={market} onSelectOption={openBetSlip} />
+                ))}
+              </div>
+            )}
           </div>
         ) : null}
 
-        {effectiveTab === 'MY_BETS' ? (
-          <MyBets
+        {/* Pestaña: Mi Cuenta (Unificada) */}
+        {effectiveTab === 'ACCOUNT' ? (
+          <AccountView
+            profile={profile}
             bets={bets}
-            loading={betsLoading}
-            error={betsError}
-            onRetry={() => void loadBets()}
+            transactions={transactions}
+            loadingBets={betsLoading}
+            loadingWallet={walletLoading}
+            onRefreshProfile={refreshProfile}
+            onDeposit={() => setShowDeposit(true)}
+            onWithdraw={() => setShowWithdraw(true)}
+            onLogout={onLogout}
+            showToast={showToast}
             onExplore={() => handleNavigate('EXPLORE')}
           />
         ) : null}
 
-        {effectiveTab === 'WALLET' ? (
-          <WalletView
-            profile={profile}
-            transactions={transactions}
-            loading={walletLoading}
-            error={walletError}
-            onRetry={() => void loadTransactions()}
-            onDeposit={() => setShowDeposit(true)}
-            onWithdraw={() => setShowWithdraw(true)}
-            onRefreshProfile={refreshProfile}
-          />
-        ) : null}
-
-        {effectiveTab === 'MODERATION' && isStaff ? (
+        {/* Pestaña: Moderación */}
+        {effectiveTab === 'MODERATION' ? (
           <ModerationPanel
             markets={markets}
             loading={marketsLoading}
             error={marketsError}
             onRetry={() => void loadMarkets()}
-            onResolve={(market) => setResolveMarket(market)}
-            onCancel={(market) => setCancelMarket(market)}
+            onResolve={(m) => setResolveMarket(m)}
+            onCancel={(m) => setCancelMarket(m)}
             onChanged={handleResolutionChanged}
             showToast={showToast}
           />
         ) : null}
 
+        {/* Pestaña: Finanzas / Admin */}
         {effectiveTab === 'ADMIN' && role === 'ADMIN' ? (
           <AdminDashboard
             overview={adminOverview}
-            currentUserId={profile.id}
             loading={adminLoading}
             error={adminError}
+            currentUserId={profile.id}
             onRetry={() => void loadAdmin()}
             onChanged={handleResolutionChanged}
             showToast={showToast}
@@ -638,40 +522,15 @@ export function Terminal({
         ) : null}
       </main>
 
+      {/* Navegación móvil inferior */}
       <MobileNav
-        profile={profile}
         activeTab={effectiveTab}
         onNavigate={handleNavigate}
         onCreate={() => setShowCreate(true)}
+        role={role}
       />
 
-      {toasts.length > 0 ? (
-        <div className="pointer-events-none fixed inset-x-0 top-16 z-[70] flex flex-col items-center gap-2 px-4 sm:items-end sm:pr-4">
-          {toasts.map((toast) => (
-            <div
-              key={toast.id}
-              className={`pointer-events-auto flex w-full max-w-sm items-start gap-2 rounded border px-3 py-2 font-mono text-[11px] shadow-lg ${toastStyles[toast.type]}`}
-              role="status"
-            >
-              {toast.type === 'success' ? (
-                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              ) : (
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              )}
-              <span className="flex-1 leading-relaxed">{toast.message}</span>
-              <button
-                type="button"
-                onClick={() => dismissToast(toast.id)}
-                className="shrink-0 opacity-60 transition hover:opacity-100"
-                aria-label="Cerrar notificación"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
-      ) : null}
-
+      {/* Modales y Cupón de Apuesta */}
       {activeSlipMarket && betSlip ? (
         <BetSlip
           key={`${activeSlipMarket.id}:${betSlip.option}`}
@@ -682,6 +541,17 @@ export function Terminal({
           userActiveInMarket={userActiveInMarket}
           onClose={() => setBetSlip(null)}
           onConfirm={(amount) => void handlePlaceBet(amount)}
+        />
+      ) : null}
+
+      {showCreate ? (
+        <CreateMarketModal
+          availableCategories={activeCategories}
+          onClose={() => setShowCreate(false)}
+          onCreated={async () => {
+            await Promise.allSettled([loadMarkets(true), refreshProfile()]);
+          }}
+          showToast={showToast}
         />
       ) : null}
 
@@ -703,17 +573,6 @@ export function Terminal({
         />
       ) : null}
 
-      {showCreate ? (
-        <CreateMarketModal
-          onClose={() => setShowCreate(false)}
-          onCreated={async () => {
-            await loadMarkets();
-            await loadTransactions(true);
-          }}
-          showToast={showToast}
-        />
-      ) : null}
-
       {resolveMarket ? (
         <ResolveMarketModal
           market={resolveMarket}
@@ -731,26 +590,43 @@ export function Terminal({
           showToast={showToast}
         />
       ) : null}
-    </div>
-  );
-}
 
-function HeroStat({
-  label,
-  value,
-  hint,
-  tone = 'text-white',
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  tone?: string;
-}) {
-  return (
-    <div className="rounded border border-[#1d222e] bg-[#0c0e14] px-2.5 py-2">
-      <div className="font-mono text-[9px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className={`mt-0.5 font-mono text-sm font-bold tabular-nums ${tone}`}>{value}</div>
-      {hint ? <div className="font-mono text-[9px] text-slate-600">{hint}</div> : null}
+      {/* Toast notifications */}
+      {toasts.length > 0 ? (
+        <div className="fixed bottom-20 right-4 z-50 flex max-w-sm flex-col gap-2 sm:bottom-4">
+          {toasts.map((toast) => (
+            <div
+              key={toast.id}
+              className={`flex items-start justify-between gap-3 rounded-xl border p-3.5 text-xs shadow-xl backdrop-blur-md ${
+                toast.type === 'success'
+                  ? 'border-emerald-500/40 bg-[#0f1d16] text-emerald-200'
+                  : toast.type === 'warn'
+                    ? 'border-amber-500/40 bg-[#1f190e] text-amber-200'
+                    : 'border-rose-500/40 bg-[#211115] text-rose-200'
+              }`}
+            >
+              <div className="flex items-start gap-2">
+                {toast.type === 'success' ? (
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#00f090]" />
+                ) : toast.type === 'warn' ? (
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                ) : (
+                  <X className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
+                )}
+                <span className="font-medium leading-relaxed">{toast.message}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => dismissToast(toast.id)}
+                className="shrink-0 opacity-60 transition hover:opacity-100"
+                aria-label="Cerrar notificación"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

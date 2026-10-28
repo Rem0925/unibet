@@ -68,9 +68,12 @@ export const CreateMarketSchema = z
       .max(200, { message: 'El título no puede exceder 200 caracteres' }),
     description: OptionalCleanText(1000),
     resolutionSource: OptionalCleanText(300),
-    category: z.enum(['FUTBOL', 'BEISBOL', 'CAMPUS', 'GAMING', 'OTRO'], {
-      message: 'Categoría inválida',
-    }),
+    category: z
+      .string()
+      .trim()
+      .min(2, { message: 'La categoría debe tener al menos 2 caracteres' })
+      .max(30, { message: 'La categoría no puede superar 30 caracteres' })
+      .transform((val) => val.toUpperCase().normalize('NFC')),
     options: z
       .array(MarketOptionSchema)
       .min(MIN_OPTIONS, { message: `Debe haber al menos ${MIN_OPTIONS} opciones de apuesta` })
