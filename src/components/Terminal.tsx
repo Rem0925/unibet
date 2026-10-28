@@ -161,8 +161,12 @@ export function Terminal({
   const loadAdmin = useCallback(async (silent = false) => {
     if (!silent) setAdminLoading(true);
     try {
-      const response = await apiFetch<{ overview: AdminOverview }>('/api/admin/overview');
-      setAdminOverview(response.overview);
+      const response = await apiFetch<AdminOverview | { overview: AdminOverview }>(
+        '/api/admin/overview'
+      );
+      const data: AdminOverview =
+        'overview' in response ? response.overview : response;
+      setAdminOverview(data);
       setAdminError(null);
     } catch (loadError) {
       setAdminError(errorMessage(loadError));
@@ -252,6 +256,9 @@ export function Terminal({
     setActiveTab(tab);
     if (subTab) {
       setAccountSubTab(subTab);
+    }
+    if (tab === 'ADMIN' && role === 'ADMIN') {
+      void loadAdmin(false);
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };

@@ -178,7 +178,10 @@ export async function GET(request: NextRequest) {
       auditLogs,
     };
 
-    return NextResponse.json(overview);
+    return NextResponse.json({
+      ...overview,
+      overview,
+    });
   } catch (error) {
     return jsonError(error);
   }
