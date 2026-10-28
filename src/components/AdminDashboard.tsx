@@ -342,6 +342,7 @@ export function AdminDashboard({
         {tab === 'USERS' ? (
           <UsersTab
             users={overview?.users ?? []}
+            loading={loading}
             currentUserId={currentUserId}
             busyKey={busyKey}
             banConfirm={banConfirm}
@@ -352,10 +353,18 @@ export function AdminDashboard({
         ) : null}
 
         {tab === 'TRANSACTIONS' ? (
-          <TransactionsTab transactions={overview?.transactions ?? []} />
+          <TransactionsTab
+            transactions={overview?.transactions ?? []}
+            loading={loading}
+          />
         ) : null}
 
-        {tab === 'AUDIT' ? <AuditTab logs={overview?.auditLogs ?? []} /> : null}
+        {tab === 'AUDIT' ? (
+          <AuditTab
+            logs={overview?.auditLogs ?? []}
+            loading={loading}
+          />
+        ) : null}
       </section>
 
       {/* Modal de Detalle e Inspección de Usuario con sus movimientos y tickets */}
@@ -576,6 +585,7 @@ function DepositsTab({
 
 function UsersTab({
   users,
+  loading,
   currentUserId,
   busyKey,
   banConfirm,
@@ -584,6 +594,7 @@ function UsersTab({
   onInspectUser,
 }: {
   users: UserProfile[];
+  loading: boolean;
   currentUserId: string;
   busyKey: string | null;
   banConfirm: string | null;
@@ -598,18 +609,28 @@ function UsersTab({
     if (!q) return users;
     return users.filter(
       (u) =>
-        u.username.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q) ||
+        (u.username?.toLowerCase() || '').includes(q) ||
+        (u.email?.toLowerCase() || '').includes(q) ||
         (u.binanceUid && u.binanceUid.includes(q))
     );
   }, [users, searchQuery]);
+
+  if (loading && users.length === 0) {
+    return (
+      <div className="space-y-3">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-16 animate-pulse rounded-2xl border border-[#1e2330] bg-[#141822]/40" />
+        ))}
+      </div>
+    );
+  }
 
   if (users.length === 0) {
     return (
       <EmptyState
         icon={<Users className="h-6 w-6" />}
-        title="Sin usuarios"
-        description="Los perfiles aparecen aquí en cuanto inician sesión."
+        title="Sin usuarios registrados"
+        description="Aún no hay cuentas registradas en la plataforma."
       />
     );
   }
@@ -760,7 +781,23 @@ function UsersTab({
   );
 }
 
-function TransactionsTab({ transactions }: { transactions: TransactionRecord[] }) {
+function TransactionsTab({
+  transactions,
+  loading,
+}: {
+  transactions: TransactionRecord[];
+  loading: boolean;
+}) {
+  if (loading && transactions.length === 0) {
+    return (
+      <div className="space-y-3">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-14 animate-pulse rounded-2xl border border-[#1e2330] bg-[#141822]/40" />
+        ))}
+      </div>
+    );
+  }
+
   if (transactions.length === 0) {
     return (
       <EmptyState
@@ -800,7 +837,23 @@ function TransactionsTab({ transactions }: { transactions: TransactionRecord[] }
   );
 }
 
-function AuditTab({ logs }: { logs: AuditLogRecord[] }) {
+function AuditTab({
+  logs,
+  loading,
+}: {
+  logs: AuditLogRecord[];
+  loading: boolean;
+}) {
+  if (loading && logs.length === 0) {
+    return (
+      <div className="space-y-3">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-14 animate-pulse rounded-2xl border border-[#1e2330] bg-[#141822]/40" />
+        ))}
+      </div>
+    );
+  }
+
   if (logs.length === 0) {
     return (
       <EmptyState

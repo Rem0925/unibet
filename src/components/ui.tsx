@@ -37,13 +37,13 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/75 backdrop-blur-sm p-4 font-sans text-sm sm:items-center"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center overflow-y-auto bg-black/80 backdrop-blur-sm p-0 sm:p-4 font-sans text-sm"
       role="dialog"
       aria-modal="true"
       aria-label={title}
     >
       <div
-        className={`my-6 w-full ${wide ? 'max-w-2xl' : 'max-w-md'} rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-5 sm:p-6 shadow-2xl shadow-black/80`}
+        className={`my-0 sm:my-6 w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} rounded-t-3xl sm:rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-5 sm:p-6 shadow-2xl shadow-black max-h-[92vh] overflow-y-auto pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:pb-6`}
       >
         <div className="mb-5 flex items-start justify-between gap-4 border-b border-[#1e2330] pb-4">
           <div className="min-w-0">

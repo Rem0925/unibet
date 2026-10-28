@@ -69,7 +69,7 @@ export function BetSlip({
 
   const containerClasses = inline
     ? 'rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-4 shadow-xl'
-    : 'fixed bottom-0 right-0 z-50 w-full border-t border-[#1e2330] bg-[#0c0d12]/95 backdrop-blur-md p-4 shadow-2xl sm:bottom-4 sm:right-4 sm:w-80 sm:rounded-2xl sm:border';
+    : 'fixed bottom-0 left-0 right-0 z-50 w-full rounded-t-3xl border-t border-[#1e2330] bg-[#0c0d12]/98 backdrop-blur-xl p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-2xl shadow-black sm:bottom-4 sm:left-auto sm:right-4 sm:w-80 sm:rounded-2xl sm:border sm:p-4';
 
   return (
     <div className={containerClasses}>
