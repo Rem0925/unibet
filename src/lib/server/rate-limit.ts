@@ -7,9 +7,12 @@ interface Bucket {
 
 const buckets = new Map<string, Bucket>();
 const MAX_BUCKETS = 10_000;
+let lastCleanup = 0;
+const CLEANUP_INTERVAL_MS = 60_000;
 
 function cleanup(now: number) {
-  if (buckets.size < MAX_BUCKETS) return;
+  if (now - lastCleanup < CLEANUP_INTERVAL_MS && buckets.size < MAX_BUCKETS) return;
+  lastCleanup = now;
   for (const [key, bucket] of buckets) {
     if (bucket.resetAt <= now) buckets.delete(key);
   }

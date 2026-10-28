@@ -35,6 +35,8 @@ interface CertificateEntry {
 }
 
 let certificateCache: { fetchedAt: number; entries: CertificateEntry[] } | null = null;
+let lastForceRefreshAt = 0;
+const FORCE_REFRESH_COOLDOWN_MS = 5 * 60 * 1000;
 
 function getConfig(): BinanceConfig {
   const apiKey = process.env.BINANCE_PAY_API_KEY;
@@ -340,7 +342,9 @@ async function getVerificationKeys(certSn: string): Promise<string[]> {
     let certificates = await getCertificates();
     let matching = certificates.filter((entry) => entry.serial === cleanSn);
 
-    if (matching.length === 0) {
+    const now = Date.now();
+    if (matching.length === 0 && now - lastForceRefreshAt > FORCE_REFRESH_COOLDOWN_MS) {
+      lastForceRefreshAt = now;
       certificates = await getCertificates(true);
       matching = certificates.filter((entry) => entry.serial === cleanSn);
     }

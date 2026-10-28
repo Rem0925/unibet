@@ -58,12 +58,19 @@ export async function parseBody<T>(request: NextRequest, schema: ZodType<T>): Pr
 }
 
 export function getClientIp(request: NextRequest): string {
+  const cfConnectingIp = request.headers.get('cf-connecting-ip')?.trim();
+  if (cfConnectingIp) return cfConnectingIp;
+
+  const realIp = request.headers.get('x-real-ip')?.trim();
+  if (realIp) return realIp;
+
   const forwarded = request.headers.get('x-forwarded-for');
   if (forwarded) {
-    const first = forwarded.split(',')[0]?.trim();
-    if (first) return first;
+    const parts = forwarded.split(',').map((p) => p.trim()).filter(Boolean);
+    const rightmost = parts[parts.length - 1];
+    if (rightmost) return rightmost;
   }
-  return request.headers.get('x-real-ip') ?? 'unknown';
+  return 'unknown';
 }
 
 export function assertNoUnexpectedFields(value: unknown): void {

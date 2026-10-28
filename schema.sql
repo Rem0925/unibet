@@ -52,7 +52,8 @@ CREATE TABLE IF NOT EXISTS public.transactions (
     status TEXT NOT NULL DEFAULT 'PENDING' CONSTRAINT transactions_status_valid CHECK (status IN ('PENDING', 'COMPLETED', 'FAILED')),
     reference_id TEXT UNIQUE,
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.audit_logs (
@@ -98,7 +99,8 @@ ALTER TABLE public.bets
 ALTER TABLE public.transactions
     ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'PENDING',
     ADD COLUMN IF NOT EXISTS reference_id TEXT,
-    ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
+    ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT timezone('utc'::text, now());
 
 ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_username_check;
 ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_binance_uid_check;
@@ -112,6 +114,7 @@ ALTER TABLE public.users ADD CONSTRAINT users_username_format CHECK (char_length
 ALTER TABLE public.users ADD CONSTRAINT users_binance_uid_format CHECK (binance_uid IS NULL OR binance_uid ~ '^[0-9]{8,10}$');
 ALTER TABLE public.users ADD CONSTRAINT users_balance_non_negative CHECK (balance >= 0);
 ALTER TABLE public.users ADD CONSTRAINT users_role_valid CHECK (role IN ('ADMIN', 'MODERATOR', 'USER'));
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_binance_uid ON public.users(binance_uid) WHERE binance_uid IS NOT NULL;
 
 ALTER TABLE public.markets DROP CONSTRAINT IF EXISTS markets_title_check;
 ALTER TABLE public.markets DROP CONSTRAINT IF EXISTS markets_category_check;
@@ -642,6 +645,9 @@ BEGIN
     END IF;
 
     IF v_caller_role = 'MODERATOR' THEN
+        IF v_market.creator_id = p_caller_id THEN
+            RAISE EXCEPTION 'Conflicto de interés: no puedes certificar un mercado que creaste.';
+        END IF;
         IF EXISTS (SELECT 1 FROM public.bets WHERE market_id = p_market_id AND user_id = p_caller_id AND status = 'ACTIVE') THEN
             RAISE EXCEPTION 'Conflicto de interés: no puedes certificar un mercado donde tienes apuestas activas.';
         END IF;
@@ -693,39 +699,43 @@ BEGIN
             v_creator_cut := ROUND(v_market.total_pool * 0.30, 2);
             v_house_cut := v_market.total_pool - v_creator_cut;
 
-            UPDATE public.users
-            SET balance = balance + v_creator_cut,
-                updated_at = timezone('utc'::text, now())
-            WHERE id = v_market.creator_id;
+            IF v_creator_cut > 0 THEN
+                UPDATE public.users
+                SET balance = balance + v_creator_cut,
+                    updated_at = timezone('utc'::text, now())
+                WHERE id = v_market.creator_id;
 
-            INSERT INTO public.transactions (user_id, type, amount, status, metadata)
-            VALUES (
-                v_market.creator_id,
-                'CREATOR_WIN',
-                v_creator_cut,
-                'COMPLETED',
-                jsonb_build_object(
-                    'market_id', p_market_id,
-                    'note', '30% por crear un mercado donde nadie acertó'
-                )
-            );
+                INSERT INTO public.transactions (user_id, type, amount, status, metadata)
+                VALUES (
+                    v_market.creator_id,
+                    'CREATOR_WIN',
+                    v_creator_cut,
+                    'COMPLETED',
+                    jsonb_build_object(
+                        'market_id', p_market_id,
+                        'note', '30% por crear un mercado donde nadie acertó'
+                    )
+                );
+            END IF;
         ELSE
             v_house_cut := v_market.total_pool;
         END IF;
 
-        UPDATE public.users
-        SET balance = balance + v_house_cut,
-            updated_at = timezone('utc'::text, now())
-        WHERE id = v_admin_id;
+        IF v_house_cut > 0 THEN
+            UPDATE public.users
+            SET balance = balance + v_house_cut,
+                updated_at = timezone('utc'::text, now())
+            WHERE id = v_admin_id;
 
-        INSERT INTO public.transactions (user_id, type, amount, status, metadata)
-        VALUES (
-            v_admin_id,
-            'HOUSE_WIN',
-            v_house_cut,
-            'COMPLETED',
-            jsonb_build_object('market_id', p_market_id, 'note', 'Pozo donde nadie acertó')
-        );
+            INSERT INTO public.transactions (user_id, type, amount, status, metadata)
+            VALUES (
+                v_admin_id,
+                'HOUSE_WIN',
+                v_house_cut,
+                'COMPLETED',
+                jsonb_build_object('market_id', p_market_id, 'note', 'Pozo donde nadie acertó')
+            );
+        END IF;
 
         UPDATE public.markets
         SET status = 'RESOLVED',
@@ -756,7 +766,7 @@ BEGIN
         SELECT *
         FROM public.bets
         WHERE market_id = p_market_id AND status = 'ACTIVE'
-        ORDER BY created_at ASC, id ASC
+        ORDER BY user_id ASC, created_at ASC, id ASC
     LOOP
         IF v_bet.selected_option = p_winning_option THEN
             v_processed_winners := v_processed_winners + 1;
@@ -807,42 +817,46 @@ BEGIN
             v_creator_cut := ROUND(v_house_surplus * 0.30, 2);
             v_house_cut := v_house_surplus - v_creator_cut;
 
-            UPDATE public.users
-            SET balance = balance + v_creator_cut,
-                updated_at = timezone('utc'::text, now())
-            WHERE id = v_market.creator_id;
+            IF v_creator_cut > 0 THEN
+                UPDATE public.users
+                SET balance = balance + v_creator_cut,
+                    updated_at = timezone('utc'::text, now())
+                WHERE id = v_market.creator_id;
 
-            INSERT INTO public.transactions (user_id, type, amount, status, metadata)
-            VALUES (
-                v_market.creator_id,
-                'CREATOR_WIN',
-                v_creator_cut,
-                'COMPLETED',
-                jsonb_build_object(
-                    'market_id', p_market_id,
-                    'note', '30% del excedente de 20x por ser el creador'
-                )
-            );
+                INSERT INTO public.transactions (user_id, type, amount, status, metadata)
+                VALUES (
+                    v_market.creator_id,
+                    'CREATOR_WIN',
+                    v_creator_cut,
+                    'COMPLETED',
+                    jsonb_build_object(
+                        'market_id', p_market_id,
+                        'note', '30% del excedente de 20x por ser el creador'
+                    )
+                );
+            END IF;
         ELSE
             v_house_cut := v_house_surplus;
         END IF;
 
-        UPDATE public.users
-        SET balance = balance + v_house_cut,
-            updated_at = timezone('utc'::text, now())
-        WHERE id = v_admin_id;
+        IF v_house_cut > 0 THEN
+            UPDATE public.users
+            SET balance = balance + v_house_cut,
+                updated_at = timezone('utc'::text, now())
+            WHERE id = v_admin_id;
 
-        INSERT INTO public.transactions (user_id, type, amount, status, metadata)
-        VALUES (
-            v_admin_id,
-            'HOUSE_WIN',
-            v_house_cut,
-            'COMPLETED',
-            jsonb_build_object(
-                'market_id', p_market_id,
-                'note', 'Excedente del tope de multiplicador (20x)'
-            )
-        );
+            INSERT INTO public.transactions (user_id, type, amount, status, metadata)
+            VALUES (
+                v_admin_id,
+                'HOUSE_WIN',
+                v_house_cut,
+                'COMPLETED',
+                jsonb_build_object(
+                    'market_id', p_market_id,
+                    'note', 'Excedente del tope de multiplicador (20x)'
+                )
+            );
+        END IF;
     END IF;
 
     UPDATE public.markets
@@ -946,6 +960,9 @@ BEGIN
     END IF;
 
     IF v_role = 'MODERATOR' THEN
+        IF v_market.creator_id = p_caller_id THEN
+            RAISE EXCEPTION 'Conflicto de interés: no puedes cancelar un mercado que creaste.';
+        END IF;
         IF EXISTS (SELECT 1 FROM public.bets WHERE market_id = p_market_id AND user_id = p_caller_id AND status = 'ACTIVE') THEN
             RAISE EXCEPTION 'Conflicto de interés: no puedes cancelar un mercado donde tienes apuestas activas.';
         END IF;
@@ -958,6 +975,7 @@ BEGIN
     FOR v_bet IN
         SELECT * FROM public.bets
         WHERE market_id = p_market_id AND status = 'ACTIVE'
+        ORDER BY user_id ASC, id ASC
         FOR UPDATE
     LOOP
         UPDATE public.users
@@ -1211,7 +1229,7 @@ DECLARE
     v_new_banned BOOLEAN;
     v_active_admins INTEGER;
 BEGIN
-    SELECT role, is_banned INTO v_admin_role, v_admin_banned FROM public.users WHERE id = p_admin_id;
+    SELECT role, is_banned INTO v_admin_role, v_admin_banned FROM public.users WHERE id = p_admin_id FOR UPDATE;
     IF v_admin_banned THEN
         RAISE EXCEPTION 'Cuenta suspendida';
     END IF;
