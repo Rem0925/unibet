@@ -5,11 +5,14 @@ import {
   AlertTriangle,
   ArrowUpRight,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clipboard,
   Clock,
   Copy,
   ExternalLink,
   Flame,
+  HelpCircle,
   Info,
   ShieldAlert,
   Wallet,
@@ -37,6 +40,7 @@ export function WithdrawModal({
   const [amount, setAmount] = useState('10.00');
   const [uid, setUid] = useState(profile.binanceUid ?? '');
   const [bep20Address, setBep20Address] = useState('');
+  const [showBscGuide, setShowBscGuide] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
@@ -44,6 +48,8 @@ export function WithdrawModal({
   const [loadingFee, setLoadingFee] = useState(false);
 
   const amountNumber = Math.round((Number.parseFloat(amount) || 0) * 100) / 100;
+  const isTronAddress = bep20Address.trim().startsWith('T') && bep20Address.trim().length >= 25;
+  const isValidBsc = /^0x[a-fA-F0-9]{40}$/.test(bep20Address.trim());
 
   // Cargar comisión dinámica de Binance SAPI al montar o al cambiar a BEP20
   useEffect(() => {
@@ -399,11 +405,74 @@ export function WithdrawModal({
               value={bep20Address}
               onChange={(event) => setBep20Address(event.target.value.trim())}
               placeholder="0x..."
-              className="w-full rounded-xl border border-[#222736] bg-[#090a0f] px-3.5 py-2.5 font-mono text-sm text-white placeholder-slate-600 focus:border-amber-400 focus:outline-none"
+              className={`w-full rounded-xl border bg-[#090a0f] px-3.5 py-2.5 font-mono text-sm text-white placeholder-slate-600 focus:outline-none ${
+                isTronAddress
+                  ? 'border-rose-500 focus:border-rose-400'
+                  : isValidBsc
+                  ? 'border-emerald-500 focus:border-emerald-400'
+                  : 'border-[#222736] focus:border-amber-400'
+              }`}
             />
-            <p className="mt-1 text-[11px] text-slate-500">
-              MetaMask, TrustWallet, Binance Web3 o cualquier billetera compatible con la red BSC.
-            </p>
+
+            {/* Validación en tiempo real del formato */}
+            {isTronAddress ? (
+              <div className="mt-2 flex items-start gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 p-2.5 text-[11px] text-rose-300">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+                <span>
+                  <strong>¡Dirección incorrecta (Red Tron)!</strong> Has ingresado una dirección que empieza con T (TRC-20). Los retiros express son por la red <strong>BNB Smart Chain (BEP-20)</strong> y deben comenzar con <strong>0x</strong>.
+                </span>
+              </div>
+            ) : isValidBsc ? (
+              <div className="mt-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-[#00f090]">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span>Dirección BEP-20 (BSC) válida detectada</span>
+              </div>
+            ) : null}
+
+            {/* Botón desplegable para ver la guía paso a paso */}
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={() => setShowBscGuide(!showBscGuide)}
+                className="flex items-center gap-1.5 text-xs font-semibold text-amber-400 hover:text-amber-300 transition"
+              >
+                <HelpCircle className="h-3.5 w-3.5" />
+                <span>{showBscGuide ? 'Ocultar guía de billetera' : '¿Cómo obtener tu dirección BEP-20 correcta?'}</span>
+                {showBscGuide ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              </button>
+
+              {showBscGuide ? (
+                <div className="mt-2 space-y-2 rounded-xl border border-amber-500/30 bg-[#0d1017] p-3 text-xs text-slate-300">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-300">
+                    <Info className="h-4 w-4 shrink-0 text-amber-400" />
+                    <span>Pasos para obtener tu dirección BEP-20 (BNB Smart Chain):</span>
+                  </div>
+
+                  <div className="space-y-2 text-[11px] leading-relaxed">
+                    <div className="rounded-lg border border-[#1e2330] bg-[#141822] p-2.5">
+                      <strong className="block text-white mb-1">📱 Opción 1: En tu aplicación de Binance</strong>
+                      <ol className="list-inside list-decimal space-y-1 text-slate-400">
+                        <li>Abre Binance y entra a <strong className="text-white">Billeteras</strong> → <strong className="text-white">Depositar</strong>.</li>
+                        <li>Selecciona la criptomoneda <strong className="text-[#00f090]">USDT</strong>.</li>
+                        <li>En la lista de redes, elige: <strong className="text-amber-400">BNB Smart Chain (BEP20)</strong>.</li>
+                        <li>Copia la dirección generada (comienza con <code className="text-white">0x...</code>) y pégala arriba.</li>
+                      </ol>
+                    </div>
+
+                    <div className="rounded-lg border border-[#1e2330] bg-[#141822] p-2.5">
+                      <strong className="block text-white mb-1">🦊 Opción 2: En MetaMask, Trust Wallet o Binance Web3</strong>
+                      <p className="text-slate-400">
+                        Copia tu dirección de billetera principal (comienza con <code className="text-white">0x...</code>). Los USDT se enviarán por la red BNB Smart Chain.
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2 text-rose-300">
+                      ⚠️ <strong>ATENCIÓN:</strong> No uses direcciones de Tron (TRC20), Solana o Bitcoin. Si envías a otra red que no sea BEP-20, los fondos se perderán.
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
         )}
 
