@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { getAdminBinancePayId } from '@/lib/binance';
+import { getAdminBinancePayId, getAdminBinancePayLink } from '@/lib/binance';
 import { DepositSchema } from '@/lib/security';
 import { requireUser } from '@/lib/server/auth';
 import { jsonError, parseBody } from '@/lib/server/http';
@@ -53,15 +53,17 @@ export async function POST(request: NextRequest) {
       throw new Error('No se pudo registrar la orden de depósito');
     }
 
+    const payLink = getAdminBinancePayLink();
+
     return NextResponse.json({
       success: true,
       tradeNo,
       adminPayId: adminPayId || null,
       amount,
       userBinanceUid: effectiveUid || null,
-      checkoutUrl: null,
-      qrcodeLink: null,
-      universalUrl: null,
+      checkoutUrl: payLink,
+      qrcodeLink: payLink,
+      universalUrl: payLink,
       expireTime: Date.now() + 60 * 60 * 1000,
     });
   } catch (error) {

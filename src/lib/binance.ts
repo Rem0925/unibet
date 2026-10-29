@@ -78,6 +78,21 @@ export function getAdminBinancePayId(): string {
   ).trim();
 }
 
+export function getAdminBinancePayLink(): string {
+  const directLink = (
+    process.env.NEXT_PUBLIC_BINANCE_PAY_LINK ||
+    process.env.BINANCE_PAY_LINK ||
+    ''
+  ).trim();
+  if (directLink) return directLink;
+
+  const payId = getAdminBinancePayId();
+  if (payId) {
+    return `https://app.binance.com/payment/pay?binanceId=${payId}`;
+  }
+  return 'https://www.binance.com/es/pay';
+}
+
 function getSapiConfig(): SapiConfig {
   const apiKey = process.env.BINANCE_API_KEY || process.env.BINANCE_PAY_API_KEY;
   const apiSecret = process.env.BINANCE_API_SECRET || process.env.BINANCE_PAY_API_SECRET;
@@ -446,11 +461,12 @@ export async function createBinanceDepositOrder(params: {
   }
 
   const adminPayId = getAdminBinancePayId();
+  const payLink = getAdminBinancePayLink();
   return {
     prepayId: null,
-    qrcodeLink: null,
-    universalUrl: null,
-    checkoutUrl: null,
+    qrcodeLink: payLink,
+    universalUrl: payLink,
+    checkoutUrl: payLink,
     expireTime: Date.now() + 60 * 60 * 1000,
     adminPayId: adminPayId || null,
   };

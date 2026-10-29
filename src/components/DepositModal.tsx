@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import QRCode from 'qrcode';
 import {
   ArrowRight,
   CheckCircle2,
@@ -14,6 +13,7 @@ import {
   Smartphone,
 } from 'lucide-react';
 import { apiFetch, errorMessage } from '@/lib/api-client';
+import { generateBinancePayQr } from '@/lib/binance-qr';
 import { DEPOSIT_FEE_RATE, DEPOSIT_MAX, DEPOSIT_MIN } from '@/lib/constants';
 import { formatUsdt } from '@/lib/format';
 import type { DepositOrderResponse, UserProfile } from '@/lib/types';
@@ -46,32 +46,35 @@ export function DepositModal({
   const fee = useMemo(() => Math.round(gross * DEPOSIT_FEE_RATE * 100) / 100, [gross]);
   const net = Math.max(0, Math.round((gross - fee) * 100) / 100);
 
-  // Generar código QR dinámico cuando la orden esté lista
+  const targetUrl = useMemo(() => {
+    if (!order) return null;
+    return (
+      order.checkoutUrl ||
+      order.qrcodeLink ||
+      order.universalUrl ||
+      (order.adminPayId ? `https://app.binance.com/payment/pay?binanceId=${order.adminPayId}` : null)
+    );
+  }, [order]);
+
+  // Generar código QR dinámico con logo oficial de Binance cuando la orden esté lista
   useEffect(() => {
-    if (!order?.adminPayId) {
+    if (!targetUrl) {
       setQrDataUrl(null);
       return;
     }
     let active = true;
-    QRCode.toDataURL(order.adminPayId, {
-      width: 220,
-      margin: 1,
-      color: {
-        dark: '#000000',
-        light: '#ffffff',
-      },
-    })
+    generateBinancePayQr(targetUrl)
       .then((url) => {
         if (active) setQrDataUrl(url);
       })
       .catch((err) => {
-        console.error('Error generando QR de Binance:', err);
+        console.error('Error generando QR oficial de Binance:', err);
       });
 
     return () => {
       active = false;
     };
-  }, [order?.adminPayId]);
+  }, [targetUrl]);
 
   useEffect(() => {
     if (!order || paid) return;
@@ -237,18 +240,30 @@ export function DepositModal({
             </div>
           </div>
 
-          {/* Código QR de Binance Pay */}
+          {/* Código QR oficial de Binance Pay idéntico al estándar oficial */}
           {qrDataUrl ? (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-4 text-center">
-              <div className="rounded-2xl bg-white p-3 shadow-xl shadow-black/40">
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-5 text-center">
+              <div className="relative rounded-2xl bg-white p-3 shadow-2xl shadow-black/50">
                 <img
                   src={qrDataUrl}
-                  alt="QR Binance Pay"
-                  className="h-44 w-44 rounded-lg object-contain"
+                  alt="QR Binance Pay Oficial"
+                  className="h-48 w-48 rounded-lg object-contain"
                 />
               </div>
+
+              {/* Botón directo "Ir a pagar" estilo Binance oficial */}
+              <a
+                href={targetUrl || 'https://www.binance.com/es/pay'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 flex w-full max-w-xs items-center justify-center gap-2 rounded-xl bg-[#00f090] hover:bg-[#00d681] py-2.5 px-4 text-sm font-extrabold text-slate-950 transition shadow-lg shadow-[#00f090]/15 cursor-pointer"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Ir a pagar
+              </a>
+
               <div className="mt-3 flex items-center gap-1.5 text-xs font-bold text-white">
-                <QrCode className="h-4 w-4 text-[#00f090]" />
+                <QrCode className="h-4 w-4 text-[#F0B90B]" />
                 <span>Escanea con el lector QR de Binance</span>
               </div>
               <p className="mt-0.5 text-[11px] text-slate-400">
@@ -257,26 +272,19 @@ export function DepositModal({
             </div>
           ) : null}
 
-          {/* Botón directo a Binance Pay */}
-          <div className="space-y-1.5">
+          {/* Botón de acceso móvil para app de Binance */}
+          <div className="text-center">
             <a
-              href="https://www.binance.com/es/pay"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#F0B90B] hover:bg-[#FCD535] py-3 text-sm font-bold text-slate-950 transition shadow-lg shadow-amber-500/10 cursor-pointer"
+              href={
+                order.adminPayId
+                  ? `bnc://app.binance.com/payment/pay?binanceId=${order.adminPayId}`
+                  : 'bnc://app.binance.com/payment/pay'
+              }
+              className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-400 hover:text-amber-300 transition"
             >
-              <ExternalLink className="h-4 w-4 text-black" />
-              Abrir Binance Pay para transferir
+              <Smartphone className="h-3 w-3" />
+              ¿En celular? Toca aquí para abrir la App de Binance
             </a>
-            <div className="text-center">
-              <a
-                href="bnc://app.binance.com/payment/pay"
-                className="inline-flex items-center gap-1 text-[11px] text-amber-400 hover:underline"
-              >
-                <Smartphone className="h-3 w-3" />
-                ¿En celular? Toca aquí para abrir la App de Binance
-              </a>
-            </div>
           </div>
 
           {/* Pay ID de la Casa */}
