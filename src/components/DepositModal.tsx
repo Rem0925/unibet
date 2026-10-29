@@ -52,7 +52,8 @@ export function DepositModal({
       order.checkoutUrl ||
       order.qrcodeLink ||
       order.universalUrl ||
-      (order.adminPayId ? `https://app.binance.com/payment/pay?binanceId=${order.adminPayId}` : null)
+      process.env.NEXT_PUBLIC_BINANCE_PAY_LINK ||
+      'https://app.binance.com/uni-qr/SEBfeouK'
     );
   }, [order]);
 

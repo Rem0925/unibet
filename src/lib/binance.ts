@@ -86,11 +86,8 @@ export function getAdminBinancePayLink(): string {
   ).trim();
   if (directLink) return directLink;
 
-  const payId = getAdminBinancePayId();
-  if (payId) {
-    return `https://app.binance.com/payment/pay?binanceId=${payId}`;
-  }
-  return 'https://www.binance.com/es/pay';
+  // Enlace universal nativo oficial de Binance Pay para Pay ID 1048652397
+  return 'https://app.binance.com/uni-qr/SEBfeouK';
 }
 
 function getSapiConfig(): SapiConfig {
