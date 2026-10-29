@@ -925,6 +925,7 @@ export function Terminal({
         onNavigate={handleNavigate}
         onCreate={() => setShowCreate(true)}
         role={role}
+        username={profile.username}
       />
 
       {/* Floating BetSlip para móviles cuando se selecciona una opción */}

@@ -97,19 +97,18 @@ export function Header({
             </div>
           </button>
 
-          {/* Botón Crear Evento */}
+          {/* Botón Crear Evento (sólo desktop/tablet, en móvil está en la barra inferior) */}
           <button
             type="button"
             onClick={onCreate}
-            className="flex items-center gap-1.5 rounded-xl bg-[#00f090] px-3.5 py-2 text-xs font-bold text-slate-950 transition hover:bg-[#00d681] shadow-lg shadow-[#00f090]/15"
+            className="hidden sm:flex items-center gap-1.5 rounded-xl bg-[#00f090] px-3.5 py-2 text-xs font-bold text-slate-950 transition hover:bg-[#00d681] shadow-lg shadow-[#00f090]/15"
           >
             <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Crear evento</span>
-            <span className="sm:hidden">Crear</span>
+            <span>Crear evento</span>
           </button>
 
-          {/* Avatar con nombre de la cuenta y menú desplegable */}
-          <div className="relative" ref={dropdownRef}>
+          {/* Avatar con nombre de la cuenta y menú desplegable (sólo desktop/tablet, en móvil está en la barra inferior) */}
+          <div className="relative hidden sm:block" ref={dropdownRef}>
             <button
               type="button"
               onClick={() => setDropdownOpen((prev) => !prev)}
@@ -232,22 +231,24 @@ export function MobileNav({
   onNavigate,
   onCreate,
   role,
+  username,
 }: {
   activeTab: AppTab;
   accountSubTab?: AccountSubTab;
   onNavigate: (tab: AppTab, subTab?: AccountSubTab) => void;
   onCreate: () => void;
   role: Role;
+  username?: string;
 }) {
   const isStaff = role === 'ADMIN' || role === 'MODERATOR';
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 flex h-16 items-center justify-around border-t border-[#1e2330] bg-[#0c0d12]/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-md sm:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 grid grid-cols-5 h-16 items-center border-t border-[#1e2330] bg-[#0c0d12]/95 px-1 pb-[env(safe-area-inset-bottom)] backdrop-blur-md sm:hidden">
       {/* 1. Mercados */}
       <button
         type="button"
         onClick={() => onNavigate('EXPLORE')}
-        className={`flex flex-col items-center gap-1 py-1 text-[10px] font-semibold transition ${
+        className={`flex w-full flex-col items-center justify-center gap-1 py-1 text-[10px] font-semibold transition ${
           activeTab === 'EXPLORE' ? 'text-[#00f090]' : 'text-slate-400 hover:text-slate-200'
         }`}
       >
@@ -259,7 +260,7 @@ export function MobileNav({
       <button
         type="button"
         onClick={() => onNavigate('ACCOUNT', 'BETS')}
-        className={`flex flex-col items-center gap-1 py-1 text-[10px] font-semibold transition ${
+        className={`flex w-full flex-col items-center justify-center gap-1 py-1 text-[10px] font-semibold transition ${
           activeTab === 'ACCOUNT' && accountSubTab === 'BETS'
             ? 'text-[#00f090]'
             : 'text-slate-400 hover:text-slate-200'
@@ -269,24 +270,24 @@ export function MobileNav({
         <span>Apuestas</span>
       </button>
 
-      {/* 3. Botón Central [+] Crear */}
-      <button
-        type="button"
-        onClick={onCreate}
-        aria-label="Crear mercado"
-        className="flex flex-col items-center gap-1 py-1 text-[10px] font-semibold text-slate-400 hover:text-white"
-      >
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#00f090] text-slate-950 shadow-lg shadow-[#00f090]/20 active:scale-95 transition-transform">
-          <Plus className="h-5 w-5" />
-        </div>
-      </button>
+      {/* 3. Botón Central [+] Crear (Centrado exacto en columna 3) */}
+      <div className="flex w-full items-center justify-center">
+        <button
+          type="button"
+          onClick={onCreate}
+          aria-label="Crear mercado"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-[#00f090] text-slate-950 shadow-lg shadow-[#00f090]/25 active:scale-95 transition-transform"
+        >
+          <Plus className="h-5 w-5 stroke-[2.5]" />
+        </button>
+      </div>
 
       {/* 4. Tab 4 según Rol: Admin / Mod / Billetera */}
       {role === 'ADMIN' ? (
         <button
           type="button"
           onClick={() => onNavigate('ADMIN')}
-          className={`flex flex-col items-center gap-1 py-1 text-[10px] font-semibold transition ${
+          className={`flex w-full flex-col items-center justify-center gap-1 py-1 text-[10px] font-semibold transition ${
             activeTab === 'ADMIN' ? 'text-[#fbbf24]' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -297,7 +298,7 @@ export function MobileNav({
         <button
           type="button"
           onClick={() => onNavigate('MODERATION')}
-          className={`flex flex-col items-center gap-1 py-1 text-[10px] font-semibold transition ${
+          className={`flex w-full flex-col items-center justify-center gap-1 py-1 text-[10px] font-semibold transition ${
             activeTab === 'MODERATION' ? 'text-purple-400' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -308,7 +309,7 @@ export function MobileNav({
         <button
           type="button"
           onClick={() => onNavigate('ACCOUNT', 'TRANSACTIONS')}
-          className={`flex flex-col items-center gap-1 py-1 text-[10px] font-semibold transition ${
+          className={`flex w-full flex-col items-center justify-center gap-1 py-1 text-[10px] font-semibold transition ${
             activeTab === 'ACCOUNT' && accountSubTab === 'TRANSACTIONS'
               ? 'text-[#00f090]'
               : 'text-slate-400 hover:text-slate-200'
@@ -319,17 +320,29 @@ export function MobileNav({
         </button>
       )}
 
-      {/* 5. Perfil / Ajustes */}
+      {/* 5. Perfil / Cuenta con Avatar del usuario */}
       <button
         type="button"
         onClick={() => onNavigate('ACCOUNT', 'SETTINGS')}
-        className={`flex flex-col items-center gap-1 py-1 text-[10px] font-semibold transition ${
+        className={`flex w-full flex-col items-center justify-center gap-1 py-1 text-[10px] font-semibold transition ${
           activeTab === 'ACCOUNT' && accountSubTab === 'SETTINGS'
             ? 'text-[#00f090]'
             : 'text-slate-400 hover:text-slate-200'
         }`}
       >
-        <User className="h-4 w-4" />
+        {username ? (
+          <div
+            className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black transition ${
+              activeTab === 'ACCOUNT' && accountSubTab === 'SETTINGS'
+                ? 'bg-[#00f090] text-slate-950 ring-2 ring-[#00f090]/40 shadow-sm shadow-[#00f090]/30'
+                : 'bg-gradient-to-tr from-emerald-500/40 to-teal-400/40 text-emerald-300 ring-1 ring-emerald-500/30'
+            }`}
+          >
+            {username.slice(0, 1).toUpperCase()}
+          </div>
+        ) : (
+          <User className="h-4 w-4" />
+        )}
         <span>Perfil</span>
       </button>
     </nav>
