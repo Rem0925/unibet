@@ -257,10 +257,11 @@ export function DepositModal({
                 href={targetUrl || 'https://www.binance.com/es/pay'}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => copyToClipboard(gross.toFixed(2), `Monto ($${gross.toFixed(2)} USDT)`)}
                 className="mt-4 flex w-full max-w-xs items-center justify-center gap-2 rounded-xl bg-[#00f090] hover:bg-[#00d681] py-2.5 px-4 text-sm font-extrabold text-slate-950 transition shadow-lg shadow-[#00f090]/15 cursor-pointer"
               >
                 <ExternalLink className="h-4 w-4" />
-                Ir a pagar
+                Ir a pagar (${gross.toFixed(2)} USDT)
               </a>
 
               <div className="mt-3 flex items-center gap-1.5 text-xs font-bold text-white">
@@ -268,7 +269,7 @@ export function DepositModal({
                 <span>Escanea con el lector QR de Binance</span>
               </div>
               <p className="mt-0.5 text-[11px] text-slate-400">
-                Abre la app de Binance y pulsa el icono de escanear [ - ] arriba a la derecha.
+                Al escanear o pulsar &quot;Ir a pagar&quot;, pega o ingresa el monto exacto: <strong className="text-white">${gross.toFixed(2)} USDT</strong>.
               </p>
             </div>
           ) : null}
@@ -281,6 +282,7 @@ export function DepositModal({
                   ? `bnc://app.binance.com/payment/pay?binanceId=${order.adminPayId}`
                   : 'bnc://app.binance.com/payment/pay'
               }
+              onClick={() => copyToClipboard(gross.toFixed(2), `Monto ($${gross.toFixed(2)} USDT)`)}
               className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-400 hover:text-amber-300 transition"
             >
               <Smartphone className="h-3 w-3" />
