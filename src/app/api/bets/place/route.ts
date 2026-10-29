@@ -11,13 +11,14 @@ export async function POST(request: NextRequest) {
     const { profile } = await requireUser(request);
     enforceRateLimit(`bet:${profile.id}`, 12, 60_000);
 
-    const { marketId, selectedOption, amount } = await parseBody(request, PlaceBetSchema);
+    const { marketId, selectedOption, amount, accessCode } = await parseBody(request, PlaceBetSchema);
 
     const { data, error } = await getServiceSupabase().rpc('fn_place_bet', {
       p_user_id: profile.id,
       p_market_id: marketId,
       p_option: selectedOption,
       p_amount: amount,
+      p_access_code: accessCode ?? null,
     });
 
     if (error) {

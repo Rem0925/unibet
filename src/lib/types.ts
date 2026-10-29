@@ -43,6 +43,32 @@ export interface MarketOdds {
   optionsOdds: Record<string, OptionOdds>;
 }
 
+export type MarketVisibility = 'PUBLIC' | 'GROUP' | 'PRIVATE_CODE';
+
+export interface GroupSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  creatorId: string;
+  creatorUsername?: string;
+  inviteCode: string;
+  memberCount: number;
+  userRole?: 'CREATOR' | 'ADMIN' | 'MEMBER';
+  userStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  createdAt: string;
+}
+
+export interface GroupMemberItem {
+  id: string;
+  groupId: string;
+  userId: string;
+  username: string;
+  role: 'CREATOR' | 'ADMIN' | 'MEMBER';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  requestedAt: string;
+  approvedAt: string | null;
+}
+
 export interface MarketSummary {
   id: string;
   creatorId: string;
@@ -51,6 +77,10 @@ export interface MarketSummary {
   description: string | null;
   resolutionSource: string | null;
   category: MarketCategory;
+  visibility: MarketVisibility;
+  groupId: string | null;
+  groupName: string | null;
+  accessCode: string | null;
   options: string[];
   closeTime: string;
   status: MarketStatus;

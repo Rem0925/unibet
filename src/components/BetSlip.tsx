@@ -25,9 +25,10 @@ export function BetSlip({
   userActiveInMarket?: number;
   inline?: boolean;
   onClose: () => void;
-  onConfirm: (amount: number) => void;
+  onConfirm: (amount: number, accessCode?: string) => void;
 }) {
   const [amount, setAmount] = useState('5.00');
+  const [enteredCode, setEnteredCode] = useState(market.accessCode ?? '');
 
   const optionPool = Number.parseFloat(market.optionPools[option] ?? '0') || 0;
   const currentMultiplier = market.odds.optionsOdds[option]?.multiplier ?? '—';
@@ -53,8 +54,11 @@ export function BetSlip({
       return `Superas el límite de $${BET_USER_MARKET_MAX} USDT por mercado (cupo: $${formatUsdt(remainingMarketCap)}).`;
     }
     if (amountNumber > balance) return 'Saldo insuficiente en tu cuenta.';
+    if (market.visibility === 'PRIVATE_CODE' && !enteredCode.trim()) {
+      return 'Debes introducir el código de acceso privado para apostar.';
+    }
     return null;
-  }, [amountNumber, balance, remainingMarketCap, validAmount]);
+  }, [amountNumber, balance, enteredCode, market.visibility, remainingMarketCap, validAmount]);
 
   const addAmount = (increment: number) => {
     const current = validAmount ? amountNumber : 0;
@@ -146,6 +150,22 @@ export function BetSlip({
         </div>
       </div>
 
+      {market.visibility === 'PRIVATE_CODE' ? (
+        <div className="mb-3.5 space-y-1">
+          <label htmlFor="bet-slip-code" className="block text-xs font-bold text-purple-300">
+            Código de Acceso Privado *
+          </label>
+          <input
+            id="bet-slip-code"
+            type="text"
+            value={enteredCode}
+            onChange={(e) => setEnteredCode(e.target.value.toUpperCase())}
+            placeholder="Introduce el código secreto"
+            className="w-full rounded-xl border border-purple-500/30 bg-[#090a0f] px-3.5 py-2 font-mono text-xs font-bold text-white uppercase focus:border-purple-400 focus:outline-none"
+          />
+        </div>
+      ) : null}
+
       <div className="mb-3.5 space-y-1.5 rounded-xl border border-[#1e2330] bg-[#141822]/60 p-3 text-xs">
         <div className="flex justify-between text-slate-400">
           <span>Ganancia potencial:</span>
@@ -166,7 +186,12 @@ export function BetSlip({
 
       <button
         type="button"
-        onClick={() => onConfirm(amountNumber)}
+        onClick={() =>
+          onConfirm(
+            amountNumber,
+            market.visibility === 'PRIVATE_CODE' ? enteredCode.trim() || undefined : undefined
+          )
+        }
         disabled={placing || Boolean(validationError)}
         className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#00f090] py-3 text-sm font-bold text-slate-950 transition hover:bg-[#00d681] shadow-lg shadow-[#00f090]/15 disabled:cursor-not-allowed disabled:opacity-50"
       >

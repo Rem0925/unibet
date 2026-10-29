@@ -83,6 +83,9 @@ export const CreateMarketSchema = z
         { message: 'Las opciones no pueden estar duplicadas (ignorando mayúsculas)' }
       ),
     closeTime: CloseTimeSchema,
+    visibility: z.enum(['PUBLIC', 'GROUP', 'PRIVATE_CODE']).default('PUBLIC'),
+    groupId: z.string().uuid().optional().nullable(),
+    accessCode: z.string().trim().max(16).optional().nullable(),
   })
   .strict();
 
@@ -100,6 +103,7 @@ export const PlaceBetSchema = z
     }).max(BET_MAX, {
       message: `Monto máximo de apuesta por seguridad: ${BET_MAX.toFixed(2)} USDT`,
     }),
+    accessCode: z.string().trim().max(16).optional().nullable(),
   })
   .strict();
 

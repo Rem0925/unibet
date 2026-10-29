@@ -12,6 +12,7 @@ import {
   Ticket,
   TrendingUp,
   User,
+  Users,
   Wallet,
 } from 'lucide-react';
 import { formatUsdt } from '@/lib/format';
@@ -26,6 +27,7 @@ interface NavigationProps {
   onDeposit: () => void;
   onWithdraw: () => void;
   onCreate: () => void;
+  onOpenGroups?: () => void;
   onLogout: () => void;
 }
 
@@ -35,6 +37,7 @@ export function Header({
   onNavigate,
   onDeposit,
   onCreate,
+  onOpenGroups,
   onLogout,
 }: NavigationProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -178,6 +181,15 @@ export function Header({
                   >
                     <Settings className="h-4 w-4 text-slate-400" />
                     <span>Configuraciones</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleMenuSelect(() => onOpenGroups?.())}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium text-sky-300 transition hover:bg-sky-500/10 hover:text-white"
+                  >
+                    <Users className="h-4 w-4 text-sky-400" />
+                    <span>Mis Grupos & Privadas</span>
                   </button>
 
                   {isStaff && (

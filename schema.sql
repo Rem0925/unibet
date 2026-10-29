@@ -1503,3 +1503,415 @@ GRANT SELECT ON public.market_option_pools TO service_role;
 
 REVOKE ALL ON FUNCTION public.fn_handle_new_user() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_set_updated_at() FROM PUBLIC;
+-- =========================================================================
+-- MIGRATION: GRUPOS Y APUESTAS PRIVADAS
+-- =========================================================================
+
+-- 1. Tabla groups
+CREATE TABLE IF NOT EXISTS public.groups (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL CONSTRAINT groups_name_length CHECK (char_length(trim(name)) BETWEEN 2 AND 60),
+    description TEXT,
+    creator_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    invite_code VARCHAR(16) NOT NULL UNIQUE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_groups_creator_id ON public.groups(creator_id);
+CREATE INDEX IF NOT EXISTS idx_groups_invite_code ON public.groups(invite_code);
+
+-- 2. Tabla group_members
+CREATE TABLE IF NOT EXISTS public.group_members (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    group_id UUID NOT NULL REFERENCES public.groups(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    role TEXT NOT NULL DEFAULT 'MEMBER' CONSTRAINT group_members_role_valid CHECK (role IN ('CREATOR', 'ADMIN', 'MEMBER')),
+    status TEXT NOT NULL DEFAULT 'PENDING' CONSTRAINT group_members_status_valid CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
+    requested_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    approved_at TIMESTAMP WITH TIME ZONE,
+    approved_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    CONSTRAINT group_members_unique_user UNIQUE(group_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_group_members_group_user ON public.group_members(group_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_group_members_user_status ON public.group_members(user_id, status);
+
+-- 3. Ampliación de markets
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' AND table_name = 'markets' AND column_name = 'visibility'
+    ) THEN
+        ALTER TABLE public.markets ADD COLUMN visibility TEXT NOT NULL DEFAULT 'PUBLIC' 
+            CONSTRAINT markets_visibility_valid CHECK (visibility IN ('PUBLIC', 'GROUP', 'PRIVATE_CODE'));
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' AND table_name = 'markets' AND column_name = 'group_id'
+    ) THEN
+        ALTER TABLE public.markets ADD COLUMN group_id UUID REFERENCES public.groups(id) ON DELETE SET NULL;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' AND table_name = 'markets' AND column_name = 'access_code'
+    ) THEN
+        ALTER TABLE public.markets ADD COLUMN access_code VARCHAR(16);
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_markets_visibility ON public.markets(visibility);
+CREATE INDEX IF NOT EXISTS idx_markets_group_id ON public.markets(group_id);
+CREATE INDEX IF NOT EXISTS idx_markets_access_code ON public.markets(access_code);
+
+-- 4. Función atómica para crear un grupo
+CREATE OR REPLACE FUNCTION public.fn_create_group(
+    p_creator_id UUID,
+    p_name TEXT,
+    p_description TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_group_id UUID;
+    v_invite_code TEXT;
+    v_clean_name TEXT;
+    v_group RECORD;
+BEGIN
+    v_clean_name := trim(p_name);
+    IF char_length(v_clean_name) < 2 OR char_length(v_clean_name) > 60 THEN
+        RAISE EXCEPTION 'El nombre del grupo debe tener entre 2 y 60 caracteres';
+    END IF;
+
+    -- Generar código único aleatorio tipo GRP-XXXXXX
+    v_invite_code := 'GRP-' || upper(substring(md5(random()::text || clock_timestamp()::text) from 1 for 6));
+    WHILE EXISTS (SELECT 1 FROM public.groups WHERE invite_code = v_invite_code) LOOP
+        v_invite_code := 'GRP-' || upper(substring(md5(random()::text || clock_timestamp()::text) from 1 for 6));
+    END LOOP;
+
+    INSERT INTO public.groups (name, description, creator_id, invite_code)
+    VALUES (v_clean_name, p_description, p_creator_id, v_invite_code)
+    RETURNING * INTO v_group;
+
+    -- El creador es miembro automático APROBADO
+    INSERT INTO public.group_members (group_id, user_id, role, status, approved_at, approved_by)
+    VALUES (v_group.id, p_creator_id, 'CREATOR', 'APPROVED', timezone('utc'::text, now()), p_creator_id);
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'group', jsonb_build_object(
+            'id', v_group.id,
+            'name', v_group.name,
+            'description', v_group.description,
+            'creatorId', v_group.creator_id,
+            'inviteCode', v_group.invite_code,
+            'createdAt', v_group.created_at
+        )
+    );
+END;
+$$;
+
+-- 5. Función para solicitar unirse a un grupo
+CREATE OR REPLACE FUNCTION public.fn_request_join_group(
+    p_user_id UUID,
+    p_invite_code TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_group RECORD;
+    v_existing RECORD;
+    v_clean_code TEXT;
+BEGIN
+    v_clean_code := upper(trim(p_invite_code));
+    SELECT * INTO v_group
+    FROM public.groups
+    WHERE upper(invite_code) = v_clean_code AND is_active = true;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Código de grupo inválido o grupo no encontrado';
+    END IF;
+
+    SELECT * INTO v_existing
+    FROM public.group_members
+    WHERE group_id = v_group.id AND user_id = p_user_id;
+
+    IF FOUND THEN
+        IF v_existing.status = 'APPROVED' THEN
+            RETURN jsonb_build_object('success', true, 'status', 'APPROVED', 'message', 'Ya eres miembro de este grupo', 'group', row_to_json(v_group));
+        ELSIF v_existing.status = 'PENDING' THEN
+            RETURN jsonb_build_object('success', true, 'status', 'PENDING', 'message', 'Tu solicitud ya está en espera de aprobación por el creador', 'group', row_to_json(v_group));
+        ELSE
+            -- Reactivar solicitud si fue rechazada antes
+            UPDATE public.group_members
+            SET status = 'PENDING', requested_at = timezone('utc'::text, now()), approved_at = NULL, approved_by = NULL
+            WHERE id = v_existing.id;
+            RETURN jsonb_build_object('success', true, 'status', 'PENDING', 'message', 'Solicitud reenviada al creador del grupo', 'group', row_to_json(v_group));
+        END IF;
+    END IF;
+
+    INSERT INTO public.group_members (group_id, user_id, role, status)
+    VALUES (v_group.id, p_user_id, 'MEMBER', 'PENDING');
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'status', 'PENDING',
+        'message', 'Solicitud enviada al creador del grupo',
+        'group', jsonb_build_object(
+            'id', v_group.id,
+            'name', v_group.name,
+            'description', v_group.description,
+            'inviteCode', v_group.invite_code
+        )
+    );
+END;
+$$;
+
+-- 6. Función para que el creador apruebe/rechace miembros
+CREATE OR REPLACE FUNCTION public.fn_manage_group_member(
+    p_admin_user_id UUID,
+    p_group_id UUID,
+    p_target_user_id UUID,
+    p_action TEXT -- 'APPROVE', 'REJECT', 'REMOVE'
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_is_admin BOOLEAN;
+    v_user_role TEXT;
+BEGIN
+    -- Verificar si es el creador del grupo o admin global
+    SELECT role INTO v_user_role FROM public.users WHERE id = p_admin_user_id;
+
+    SELECT EXISTS (
+        SELECT 1 FROM public.groups WHERE id = p_group_id AND creator_id = p_admin_user_id
+    ) INTO v_is_admin;
+
+    IF NOT v_is_admin AND v_user_role <> 'ADMIN' THEN
+        RAISE EXCEPTION 'Sólo el creador del grupo puede gestionar miembros';
+    END IF;
+
+    IF p_action = 'APPROVE' THEN
+        UPDATE public.group_members
+        SET status = 'APPROVED', approved_at = timezone('utc'::text, now()), approved_by = p_admin_user_id
+        WHERE group_id = p_group_id AND user_id = p_target_user_id;
+    ELSIF p_action = 'REJECT' THEN
+        UPDATE public.group_members
+        SET status = 'REJECTED'
+        WHERE group_id = p_group_id AND user_id = p_target_user_id;
+    ELSIF p_action = 'REMOVE' THEN
+        DELETE FROM public.group_members
+        WHERE group_id = p_group_id AND user_id = p_target_user_id AND role <> 'CREATOR';
+    ELSE
+        RAISE EXCEPTION 'Acción inválida. Usa APPROVE, REJECT o REMOVE';
+    END IF;
+
+    RETURN jsonb_build_object('success', true, 'action', p_action);
+END;
+$$;
+
+-- 7. Actualizar fn_place_bet para validar permisos en mercados GROUP y PRIVATE_CODE
+CREATE OR REPLACE FUNCTION public.fn_place_bet(
+    p_user_id UUID,
+    p_market_id UUID,
+    p_option TEXT,
+    p_amount NUMERIC(18, 4),
+    p_access_code TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_market RECORD;
+    v_user RECORD;
+    v_bet_id UUID;
+    v_new_balance NUMERIC(18, 4);
+    v_user_market_total NUMERIC(18, 4);
+BEGIN
+    IF p_amount IS NULL OR p_amount < 0.5000 OR p_amount > 500.0000 THEN
+        RAISE EXCEPTION 'El monto debe estar entre 0.50 y 500.00 USDT';
+    END IF;
+
+    IF p_option IS NULL OR char_length(trim(p_option)) = 0 THEN
+        RAISE EXCEPTION 'Debes seleccionar una opción';
+    END IF;
+
+    SELECT * INTO v_market
+    FROM public.markets
+    WHERE id = p_market_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Mercado no encontrado';
+    END IF;
+
+    IF v_market.status <> 'OPEN' THEN
+        RAISE EXCEPTION 'El mercado no está abierto';
+    END IF;
+
+    IF v_market.close_time <= timezone('utc'::text, now()) THEN
+        RAISE EXCEPTION 'El tiempo para apostar ya expiró';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements_text(v_market.options) AS elem(value)
+        WHERE elem.value = p_option
+    ) THEN
+        RAISE EXCEPTION 'La opción seleccionada no existe en este mercado';
+    END IF;
+
+    -- Validar VISIBILIDAD DE GRUPO
+    IF v_market.visibility = 'GROUP' AND v_market.group_id IS NOT NULL THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM public.group_members
+            WHERE group_id = v_market.group_id
+              AND user_id = p_user_id
+              AND status = 'APPROVED'
+        ) THEN
+            RAISE EXCEPTION 'Esta apuesta es privada para miembros aprobados del grupo';
+        END IF;
+    END IF;
+
+    -- Validar VISIBILIDAD POR CÓDIGO
+    IF v_market.visibility = 'PRIVATE_CODE' AND v_market.access_code IS NOT NULL THEN
+        -- Si el usuario ya tiene una apuesta previa en este mercado, se considera autorizado
+        IF NOT EXISTS (
+            SELECT 1 FROM public.bets WHERE market_id = p_market_id AND user_id = p_user_id
+        ) THEN
+            IF p_access_code IS NULL OR upper(trim(p_access_code)) <> upper(trim(v_market.access_code)) THEN
+                RAISE EXCEPTION 'Código de acceso privado incorrecto o requerido';
+            END IF;
+        END IF;
+    END IF;
+
+    SELECT * INTO v_user
+    FROM public.users
+    WHERE id = p_user_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Usuario no encontrado';
+    END IF;
+
+    IF v_user.is_banned THEN
+        RAISE EXCEPTION 'Esta cuenta se encuentra suspendida';
+    END IF;
+
+    IF v_user.balance < p_amount THEN
+        RAISE EXCEPTION 'Saldo insuficiente en tu billetera';
+    END IF;
+
+    SELECT COALESCE(SUM(amount), 0) INTO v_user_market_total
+    FROM public.bets
+    WHERE market_id = p_market_id
+      AND user_id = p_user_id
+      AND status = 'ACTIVE';
+
+    IF v_user_market_total + p_amount > 150.0000 THEN
+        RAISE EXCEPTION 'Tope de 150 USDT apostados por usuario en este mercado (ya llevas %s)', v_user_market_total;
+    END IF;
+
+    v_new_balance := v_user.balance - p_amount;
+
+    UPDATE public.users
+    SET balance = v_new_balance
+    WHERE id = p_user_id;
+
+    UPDATE public.markets
+    SET total_pool = total_pool + p_amount
+    WHERE id = p_market_id;
+
+    INSERT INTO public.bets (
+        market_id,
+        user_id,
+        selected_option,
+        amount,
+        status
+    )
+    VALUES (
+        p_market_id,
+        p_user_id,
+        p_option,
+        p_amount,
+        'ACTIVE'
+    )
+    RETURNING id INTO v_bet_id;
+
+    INSERT INTO public.transactions (
+        user_id,
+        type,
+        amount,
+        status,
+        metadata
+    )
+    VALUES (
+        p_user_id,
+        'BET',
+        p_amount,
+        'COMPLETED',
+        jsonb_build_object(
+            'betId', v_bet_id,
+            'marketId', p_market_id,
+            'option', p_option,
+            'marketTitle', v_market.title
+        )
+    );
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'betId', v_bet_id,
+        'newBalance', v_new_balance,
+        'totalPool', v_market.total_pool + p_amount
+    );
+END;
+$$;
+
+-- RLS y permisos
+ALTER TABLE public.groups ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.group_members ENABLE ROW LEVEL SECURITY;
+
+GRANT ALL ON TABLE public.groups TO service_role;
+GRANT SELECT, INSERT ON TABLE public.groups TO authenticated;
+GRANT SELECT ON TABLE public.groups TO anon;
+
+GRANT ALL ON TABLE public.group_members TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.group_members TO authenticated;
+GRANT SELECT ON TABLE public.group_members TO anon;
+
+-- Políticas de groups
+DROP POLICY IF EXISTS groups_read_policy ON public.groups;
+CREATE POLICY groups_read_policy ON public.groups
+    FOR SELECT TO public
+    USING (true);
+
+DROP POLICY IF EXISTS groups_insert_policy ON public.groups;
+CREATE POLICY groups_insert_policy ON public.groups
+    FOR INSERT TO authenticated
+    WITH CHECK (auth.uid() = creator_id);
+
+-- Políticas de group_members
+DROP POLICY IF EXISTS group_members_read_policy ON public.group_members;
+CREATE POLICY group_members_read_policy ON public.group_members
+    FOR SELECT TO public
+    USING (true);
+
+DROP POLICY IF EXISTS group_members_all_service ON public.group_members;
+CREATE POLICY group_members_all_service ON public.group_members
+    FOR ALL TO service_role
+    USING (true)
+    WITH CHECK (true);

@@ -1,7 +1,17 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeft, Ban, CheckCircle2, Clock, ShieldCheck, Trophy } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Ban,
+  CheckCircle2,
+  Clock,
+  Lock,
+  ShieldCheck,
+  Trophy,
+  Users,
+} from 'lucide-react';
 import { useNow } from '@/hooks/useNow';
 import { apiFetch, errorMessage } from '@/lib/api-client';
 import { formatShortDate, formatUsdt } from '@/lib/format';
@@ -182,6 +192,17 @@ export function ModerationPanel({
                       >
                         {statusLabel[market.status]}
                       </span>
+                      {market.visibility === 'GROUP' ? (
+                        <span className="flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-sky-400">
+                          <Users className="h-3 w-3" />
+                          Grupo: {market.groupName || 'Privado'}
+                        </span>
+                      ) : market.visibility === 'PRIVATE_CODE' ? (
+                        <span className="flex items-center gap-1 rounded-full border border-purple-500/30 bg-purple-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-purple-400">
+                          <Lock className="h-3 w-3" />
+                          Privada (Código)
+                        </span>
+                      ) : null}
                       {overdue ? (
                         <span className="flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-400">
                           <AlertTriangle className="h-3 w-3" /> Tiempo expirado

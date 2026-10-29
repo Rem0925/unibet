@@ -1,11 +1,19 @@
 'use client';
 
-import { useState } from 'react';
-import { CalendarClock, Plus, Trash2, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import {
+  CalendarClock,
+  Globe,
+  Lock,
+  Plus,
+  Trash2,
+  Users,
+  X,
+} from 'lucide-react';
 import { apiFetch, errorMessage } from '@/lib/api-client';
 import { MAX_MARKET_DAYS, MAX_OPTIONS, MIN_OPTIONS } from '@/lib/constants';
 import { toDateTimeLocal } from '@/lib/format';
-import type { CreateMarketResponse } from '@/lib/types';
+import type { CreateMarketResponse, GroupSummary, MarketVisibility } from '@/lib/types';
 import { Modal, Spinner } from './ui';
 
 export function CreateMarketModal({
@@ -25,9 +33,10 @@ export function CreateMarketModal({
   };
 
   // Default suggested chips if no markets are open yet
-  const categoryChips = availableCategories.length > 0
-    ? availableCategories
-    : ['FÚTBOL', 'BÉISBOL', 'CAMPUS', 'GAMING'];
+  const categoryChips =
+    availableCategories.length > 0
+      ? availableCategories
+      : ['FÚTBOL', 'BÉISBOL', 'CAMPUS', 'GAMING'];
 
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState(categoryChips[0] ?? 'GENERAL');
@@ -37,8 +46,41 @@ export function CreateMarketModal({
   const [closeTime, setCloseTime] = useState(defaultCloseTime);
   const [description, setDescription] = useState('');
   const [resolutionSource, setResolutionSource] = useState('');
+
+  // Audience & Visibility
+  const [visibility, setVisibility] = useState<MarketVisibility>('PUBLIC');
+  const [groupId, setGroupId] = useState<string>('');
+  const [accessCode, setAccessCode] = useState<string>('');
+  const [groups, setGroups] = useState<GroupSummary[]>([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const fetchGroups = async () => {
+      setLoadingGroups(true);
+      try {
+        const res = await apiFetch<{ groups: GroupSummary[] }>('/api/groups');
+        if (active) {
+          const approved = res.groups.filter((g) => g.userStatus === 'APPROVED');
+          setGroups(approved);
+          if (approved.length > 0) {
+            setGroupId(approved[0].id);
+          }
+        }
+      } catch {
+        // ignore
+      } finally {
+        if (active) setLoadingGroups(false);
+      }
+    };
+    void fetchGroups();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const updateOption = (index: number, value: string) => {
     setOptions((current) => current.map((opt, i) => (i === index ? value : opt)));
@@ -69,6 +111,11 @@ export function CreateMarketModal({
 
     if (effectiveCategory.length < 2) {
       setError('Escribe o selecciona una categoría para el evento.');
+      return;
+    }
+
+    if (visibility === 'GROUP' && !groupId) {
+      setError('Debes pertenecer a un grupo y seleccionarlo para publicar una apuesta de grupo.');
       return;
     }
 
@@ -108,6 +155,12 @@ export function CreateMarketModal({
           closeTime: closeDate.toISOString(),
           description: description.trim() || undefined,
           resolutionSource: resolutionSource.trim() || undefined,
+          visibility,
+          groupId: visibility === 'GROUP' ? groupId : undefined,
+          accessCode:
+            visibility === 'PRIVATE_CODE' && accessCode.trim()
+              ? accessCode.trim().toUpperCase()
+              : undefined,
         }),
       });
 
@@ -122,12 +175,142 @@ export function CreateMarketModal({
   };
 
   return (
-    <Modal title="Crear nuevo evento" onClose={onClose}>
+    <Modal title="Crear nuevo evento" onClose={onClose} wide={true}>
       <form onSubmit={submit} className="space-y-4">
+        {/* Selector de Audiencia / Visibilidad */}
+        <div>
+          <label className="mb-1.5 block text-xs font-bold text-slate-300">
+            ¿Quién puede ver y apostar en este evento?
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {/* Opción 1: Pública */}
+            <button
+              type="button"
+              onClick={() => setVisibility('PUBLIC')}
+              className={`flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition ${
+                visibility === 'PUBLIC'
+                  ? 'border-[#00f090] bg-[#00f090]/10 ring-1 ring-[#00f090]/30'
+                  : 'border-[#212633] bg-[#141822] hover:border-slate-500'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 font-bold text-xs text-white">
+                <Globe
+                  className={`h-4 w-4 ${
+                    visibility === 'PUBLIC' ? 'text-[#00f090]' : 'text-slate-400'
+                  }`}
+                />
+                <span>Pública</span>
+              </div>
+              <span className="text-[11px] text-slate-400 leading-tight">
+                Todos en la plataforma
+              </span>
+            </button>
+
+            {/* Opción 2: Grupo Privado */}
+            <button
+              type="button"
+              onClick={() => setVisibility('GROUP')}
+              className={`flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition ${
+                visibility === 'GROUP'
+                  ? 'border-sky-400 bg-sky-500/10 ring-1 ring-sky-400/30'
+                  : 'border-[#212633] bg-[#141822] hover:border-slate-500'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 font-bold text-xs text-white">
+                <Users
+                  className={`h-4 w-4 ${
+                    visibility === 'GROUP' ? 'text-sky-400' : 'text-slate-400'
+                  }`}
+                />
+                <span>Grupo Privado</span>
+              </div>
+              <span className="text-[11px] text-slate-400 leading-tight">
+                Solo miembros de tu grupo
+              </span>
+            </button>
+
+            {/* Opción 3: Privada por Código */}
+            <button
+              type="button"
+              onClick={() => setVisibility('PRIVATE_CODE')}
+              className={`flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition ${
+                visibility === 'PRIVATE_CODE'
+                  ? 'border-purple-400 bg-purple-500/10 ring-1 ring-purple-400/30'
+                  : 'border-[#212633] bg-[#141822] hover:border-slate-500'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 font-bold text-xs text-white">
+                <Lock
+                  className={`h-4 w-4 ${
+                    visibility === 'PRIVATE_CODE' ? 'text-purple-400' : 'text-slate-400'
+                  }`}
+                />
+                <span>Por Código / Link</span>
+              </div>
+              <span className="text-[11px] text-slate-400 leading-tight">
+                Solo quienes tengan tu código
+              </span>
+            </button>
+          </div>
+
+          {/* Subpanel de Grupo */}
+          {visibility === 'GROUP' ? (
+            <div className="mt-2.5 rounded-xl border border-sky-500/20 bg-sky-500/5 p-3 space-y-2">
+              <label htmlFor="group-select" className="block text-xs font-bold text-sky-300">
+                Selecciona el grupo destino:
+              </label>
+              {loadingGroups ? (
+                <div className="h-9 animate-pulse rounded-lg bg-[#141822]" />
+              ) : groups.length === 0 ? (
+                <div className="text-xs text-slate-400 space-y-1">
+                  <p className="text-amber-400 font-semibold">
+                    No perteneces a ningún grupo aprobado todavía.
+                  </p>
+                  <p>Crea un grupo primero o únete a uno para poder publicar apuestas de grupo.</p>
+                </div>
+              ) : (
+                <select
+                  id="group-select"
+                  value={groupId}
+                  onChange={(e) => setGroupId(e.target.value)}
+                  className="w-full rounded-lg border border-[#212633] bg-[#0c0d12] px-3 py-2 text-xs font-semibold text-white focus:border-sky-400 focus:outline-none cursor-pointer"
+                >
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name} ({g.memberCount} miembros)
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          ) : null}
+
+          {/* Subpanel de Código Privado */}
+          {visibility === 'PRIVATE_CODE' ? (
+            <div className="mt-2.5 rounded-xl border border-purple-500/20 bg-purple-500/5 p-3 space-y-2">
+              <label htmlFor="custom-code" className="block text-xs font-bold text-purple-300">
+                Código secreto de acceso (opcional):
+              </label>
+              <input
+                id="custom-code"
+                type="text"
+                maxLength={16}
+                value={accessCode}
+                onChange={(e) => setAccessCode(e.target.value.toUpperCase())}
+                placeholder="Ej: FINAL2026 (o deja en blanco para generar uno aleatorio)"
+                className="w-full rounded-lg border border-[#212633] bg-[#0c0d12] px-3 py-2 font-mono text-xs font-bold text-white uppercase focus:border-purple-400 focus:outline-none"
+              />
+              <p className="text-[11px] text-slate-400">
+                Al crear el evento se generará un enlace directo que podrás compartir con tus amigos para que puedan apostar.
+              </p>
+            </div>
+          ) : null}
+        </div>
+
         {/* Título */}
         <div>
           <label htmlFor="market-title" className="mb-1 block text-xs font-bold text-slate-300">
-            Título o pregunta
+            Título o pregunta *
           </label>
           <input
             id="market-title"
@@ -144,7 +327,7 @@ export function CreateMarketModal({
         {/* Categoría Dinámica */}
         <div>
           <label className="mb-1.5 block text-xs font-bold text-slate-300">
-            Categoría
+            Categoría *
           </label>
           <div className="flex flex-wrap gap-1.5">
             {categoryChips.map((cat) => {
@@ -197,7 +380,7 @@ export function CreateMarketModal({
         <div>
           <div className="mb-1.5 flex items-center justify-between">
             <label className="text-xs font-bold text-slate-300">
-              Opciones de resultado
+              Opciones de resultado *
             </label>
             {options.length < MAX_OPTIONS ? (
               <button
@@ -240,7 +423,7 @@ export function CreateMarketModal({
         {/* Cierre de apuestas */}
         <div>
           <label htmlFor="market-close" className="mb-1 block text-xs font-bold text-slate-300">
-            Fecha y hora de inicio (Cierre de apuestas)
+            Fecha y hora de inicio (Cierre de apuestas) *
           </label>
           <input
             id="market-close"
@@ -277,9 +460,9 @@ export function CreateMarketModal({
         <button
           type="submit"
           disabled={loading}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#00f090] py-2.5 text-sm font-bold text-black transition hover:bg-[#00d681] disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#00f090] py-3 text-sm font-bold text-black transition hover:bg-[#00d681] disabled:opacity-50"
         >
-          {loading ? <Spinner className="h-4 w-4" /> : null}
+          {loading ? <Spinner className="h-4 w-4 text-black" /> : null}
           {loading ? 'Publicando…' : 'Publicar evento'}
         </button>
       </form>

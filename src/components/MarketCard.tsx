@@ -1,6 +1,6 @@
 'use client';
 
-import { Clock, Trophy, Users } from 'lucide-react';
+import { Clock, Copy, Lock, Trophy, Users } from 'lucide-react';
 import { useNow } from '@/hooks/useNow';
 import { formatShortDate, formatUsdt, timeUntil } from '@/lib/format';
 import type { MarketSummary } from '@/lib/types';
@@ -17,9 +17,11 @@ const statusBadge: Record<MarketSummary['status'], { label: string; style: strin
 export function MarketCard({
   market,
   onSelectOption,
+  onCopyAccessCode,
 }: {
   market: MarketSummary;
   onSelectOption: (market: MarketSummary, option: string) => void;
+  onCopyAccessCode?: (market: MarketSummary) => void;
 }) {
   const now = useNow();
   const canBet = market.status === 'OPEN' && new Date(market.closeTime).getTime() > now;
@@ -28,12 +30,41 @@ export function MarketCard({
   return (
     <article className="group flex flex-col justify-between rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-4 shadow-sm transition hover:border-[#2f374a] hover:shadow-xl hover:shadow-black/50">
       <div>
-        {/* Cabecera: Categoría y Estado */}
+        {/* Cabecera: Categoría, Visibilidad y Estado */}
         <div className="mb-3 flex items-center justify-between gap-2 text-xs">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="rounded-lg border border-[#212633] bg-[#141822] px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-slate-300 uppercase">
               {market.category}
             </span>
+
+            {/* Badges de Visibilidad de Grupo o Privada */}
+            {market.visibility === 'GROUP' ? (
+              <span className="flex items-center gap-1 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[10px] font-bold text-sky-400">
+                <Users className="h-3 w-3" />
+                {market.groupName || 'Grupo'}
+              </span>
+            ) : market.visibility === 'PRIVATE_CODE' ? (
+              <span className="flex items-center gap-1 rounded-lg border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold text-purple-400">
+                <Lock className="h-3 w-3" />
+                Privada
+              </span>
+            ) : null}
+
+            {market.accessCode && onCopyAccessCode ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCopyAccessCode(market);
+                }}
+                className="flex items-center gap-1 rounded-lg border border-purple-500/40 bg-purple-500/15 px-2 py-0.5 text-[10px] font-mono font-bold text-purple-300 hover:bg-purple-500/25 transition cursor-pointer"
+                title="Copiar código de acceso y enlace"
+              >
+                <Copy className="h-2.5 w-2.5" />
+                <span>{market.accessCode}</span>
+              </button>
+            ) : null}
+
             {market.status === 'RESOLVED' && market.winningOption ? (
               <span className="flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-400">
                 <Trophy className="h-3 w-3" />

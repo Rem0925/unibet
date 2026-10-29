@@ -10,7 +10,9 @@ import {
   CheckCircle2,
   Clock,
   Flame,
+  Globe,
   Layers,
+  Lock,
   Plus,
   RefreshCw,
   Search,
@@ -28,6 +30,7 @@ import { AdminDashboard } from '@/components/AdminDashboard';
 import { BetSlip } from '@/components/BetSlip';
 import { CreateMarketModal } from '@/components/CreateMarketModal';
 import { DepositModal } from '@/components/DepositModal';
+import { GroupsModal } from '@/components/GroupsModal';
 import { CancelMarketModal, ResolveMarketModal } from '@/components/MarketActions';
 import { MarketCard } from '@/components/MarketCard';
 import { ModerationPanel } from '@/components/ModerationPanel';
@@ -94,6 +97,7 @@ export function Terminal({
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('TODOS');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('PLAYING');
+  const [visibilityFilter, setVisibilityFilter] = useState<'ALL' | 'PUBLIC' | 'GROUP' | 'PRIVATE_CODE'>('ALL');
   const [sortBy, setSortBy] = useState<SortOption>('POOL');
 
   const [betSlip, setBetSlip] = useState<BetSlipState | null>(null);
@@ -101,6 +105,7 @@ export function Terminal({
   const [showDeposit, setShowDeposit] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [showGroups, setShowGroups] = useState(false);
   const [resolveMarket, setResolveMarket] = useState<MarketSummary | null>(null);
   const [cancelMarket, setCancelMarket] = useState<MarketSummary | null>(null);
 
@@ -122,7 +127,11 @@ export function Terminal({
   const loadMarkets = useCallback(async (silent = false) => {
     if (!silent) setMarketsLoading(true);
     try {
-      const response = await apiFetch<MarketsResponse>('/api/markets');
+      const codeParam = typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('code')
+        : null;
+      const url = codeParam ? `/api/markets?code=${encodeURIComponent(codeParam)}` : '/api/markets';
+      const response = await apiFetch<MarketsResponse>(url);
       setMarkets(response.markets);
       setMarketsError(null);
     } catch (loadError) {
@@ -263,7 +272,7 @@ export function Terminal({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handlePlaceBet = async (amount: number) => {
+  const handlePlaceBet = async (amount: number, accessCode?: string) => {
     if (!betSlip) return;
     setPlacing(true);
     try {
@@ -273,6 +282,7 @@ export function Terminal({
           marketId: betSlip.marketId,
           selectedOption: betSlip.option,
           amount,
+          accessCode: accessCode?.trim() || undefined,
         }),
       });
       showToast(response.message || 'Apuesta confirmada con éxito', 'success');
@@ -288,6 +298,17 @@ export function Terminal({
     } finally {
       setPlacing(false);
     }
+  };
+
+  const handleCopyMarketAccess = (market: MarketSummary) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const link = market.accessCode
+      ? `${origin}/?code=${encodeURIComponent(market.accessCode)}`
+      : `${origin}`;
+    void navigator.clipboard.writeText(
+      `🎯 ¡Apuesta en "${market.title}"!\n🔑 Código de acceso: ${market.accessCode}\n🔗 Enlace directo: ${link}`
+    );
+    showToast(`Enlace y código de "${market.title}" copiados`, 'success');
   };
 
   const handleResolutionChanged = async () => {
@@ -374,8 +395,17 @@ export function Terminal({
       );
     };
 
+    const visibilityMatch = (market: MarketSummary) => {
+      if (visibilityFilter === 'ALL') return true;
+      return market.visibility === visibilityFilter;
+    };
+
     const list = markets.filter(
-      (market) => statusMatch(market) && categoryMatch(market) && searchMatch(market)
+      (market) =>
+        statusMatch(market) &&
+        categoryMatch(market) &&
+        searchMatch(market) &&
+        visibilityMatch(market)
     );
 
     return list.sort((a, b) => {
@@ -390,7 +420,7 @@ export function Terminal({
       }
       return 0;
     });
-  }, [markets, search, statusFilter, categoryFilter, sortBy]);
+  }, [markets, search, statusFilter, categoryFilter, visibilityFilter, sortBy]);
 
   const playingCount = useMemo(
     () => markets.filter((m) => m.status === 'OPEN' || m.status === 'CLOSED').length,
@@ -411,6 +441,7 @@ export function Terminal({
         onDeposit={() => setShowDeposit(true)}
         onWithdraw={() => setShowWithdraw(true)}
         onCreate={() => setShowCreate(true)}
+        onOpenGroups={() => setShowGroups(true)}
         onLogout={onLogout}
       />
 
@@ -484,6 +515,25 @@ export function Terminal({
                     <span className="font-mono text-[10px] text-slate-500">{resolvedCount}</span>
                   </button>
                 </div>
+              </div>
+
+              {/* Sección de Círculos Privados */}
+              <div className="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-3.5 shadow-sm space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-sky-400">
+                  <Users className="h-4 w-4" />
+                  <span>Círculos Privados</span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Apuesta solo con tus amigos en grupos cerrados o con código secreto.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowGroups(true)}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-sky-500/40 bg-sky-500/15 py-2 text-xs font-bold text-sky-300 hover:bg-sky-500/25 transition"
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  <span>Gestionar Mis Grupos</span>
+                </button>
               </div>
 
               {/* Categorías Dinámicas en uso */}
@@ -695,24 +745,84 @@ export function Terminal({
                     </div>
                   </div>
 
-                  {/* Filtro de Estado */}
-                  <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-[#1e2330]/50">
-                    <div className="flex flex-wrap gap-1 rounded-xl border border-[#212633] bg-[#141822] p-1">
-                      {statusFilters.map((f) => (
+                  {/* Filtros de Estado y de Audiencia */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-[#1e2330]/50">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {/* Estado */}
+                      <div className="flex flex-wrap gap-1 rounded-xl border border-[#212633] bg-[#141822] p-1">
+                        {statusFilters.map((f) => (
+                          <button
+                            key={f.id}
+                            type="button"
+                            onClick={() => setStatusFilter(f.id)}
+                            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                              statusFilter === f.id
+                                ? 'bg-[#00f090] text-slate-950 shadow-sm'
+                                : 'text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            {f.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Visibilidad / Audiencia */}
+                      <div className="flex flex-wrap gap-1 rounded-xl border border-[#212633] bg-[#141822] p-1">
                         <button
-                          key={f.id}
                           type="button"
-                          onClick={() => setStatusFilter(f.id)}
-                          className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
-                            statusFilter === f.id
+                          onClick={() => setVisibilityFilter('ALL')}
+                          className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                            visibilityFilter === 'ALL'
+                              ? 'bg-[#181c26] text-white ring-1 ring-slate-600'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          Todas
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setVisibilityFilter('PUBLIC')}
+                          className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                            visibilityFilter === 'PUBLIC'
                               ? 'bg-[#00f090] text-slate-950 shadow-sm'
                               : 'text-slate-400 hover:text-white'
                           }`}
                         >
-                          {f.label}
+                          Públicas
                         </button>
-                      ))}
+                        <button
+                          type="button"
+                          onClick={() => setVisibilityFilter('GROUP')}
+                          className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                            visibilityFilter === 'GROUP'
+                              ? 'bg-sky-400 text-slate-950 shadow-sm'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          Grupos
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setVisibilityFilter('PRIVATE_CODE')}
+                          className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                            visibilityFilter === 'PRIVATE_CODE'
+                              ? 'bg-purple-400 text-slate-950 shadow-sm'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          Privadas
+                        </button>
+                      </div>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowGroups(true)}
+                      className="flex items-center gap-1.5 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-xs font-bold text-sky-400 hover:bg-sky-500/20 transition"
+                    >
+                      <Users className="h-3.5 w-3.5" />
+                      <span>Mis Grupos</span>
+                    </button>
                   </div>
                 </div>
 
@@ -786,7 +896,12 @@ export function Terminal({
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2">
                   {filteredMarkets.map((market) => (
-                    <MarketCard key={market.id} market={market} onSelectOption={openBetSlip} />
+                    <MarketCard
+                      key={market.id}
+                      market={market}
+                      onSelectOption={openBetSlip}
+                      onCopyAccessCode={handleCopyMarketAccess}
+                    />
                   ))}
                 </div>
               )}
@@ -806,7 +921,7 @@ export function Terminal({
                   userActiveInMarket={userActiveInMarket}
                   inline={true}
                   onClose={() => setBetSlip(null)}
-                  onConfirm={(amount) => void handlePlaceBet(amount)}
+                  onConfirm={(amount, code) => void handlePlaceBet(amount, code)}
                 />
               ) : (
                 <div className="rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-5 shadow-sm text-center">
@@ -940,12 +1055,20 @@ export function Terminal({
             userActiveInMarket={userActiveInMarket}
             inline={false}
             onClose={() => setBetSlip(null)}
-            onConfirm={(amount) => void handlePlaceBet(amount)}
+            onConfirm={(amount, code) => void handlePlaceBet(amount, code)}
           />
         </div>
       ) : null}
 
       {/* Modales */}
+      {showGroups ? (
+        <GroupsModal
+          onClose={() => setShowGroups(false)}
+          showToast={showToast}
+          onGroupsChanged={() => void loadMarkets(true)}
+        />
+      ) : null}
+
       {showCreate ? (
         <CreateMarketModal
           availableCategories={activeCategories}
