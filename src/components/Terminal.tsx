@@ -658,56 +658,62 @@ export function Terminal({
 
               {/* Barra de Filtros y Búsqueda */}
               <div className="rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-3 sm:p-4 shadow-sm space-y-3">
-                <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
-                  {/* Búsqueda */}
-                  <div className="relative flex-1">
-                    <Search className="pointer-events-none absolute left-3.5 top-3 h-4 w-4 text-slate-500" />
-                    <input
-                      type="search"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Buscar eventos, opciones o creador..."
-                      className="w-full rounded-xl border border-[#212633] bg-[#141822] py-2.5 pl-10 pr-4 text-xs font-medium text-white placeholder-slate-500 focus:border-[#00f090] focus:outline-none"
-                    />
-                    {search && (
-                      <button
-                        type="button"
-                        onClick={() => setSearch('')}
-                        className="absolute right-3 top-3 text-slate-400 hover:text-white"
+                <div className="flex flex-col gap-2.5">
+                  {/* Búsqueda y Ordenamiento */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
+                    <div className="relative flex-1">
+                      <Search className="pointer-events-none absolute left-3.5 top-3 h-4 w-4 text-slate-500" />
+                      <input
+                        type="search"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Buscar eventos, opciones o creador..."
+                        className="w-full rounded-xl border border-[#212633] bg-[#141822] py-2.5 pl-10 pr-8 text-xs font-medium text-white placeholder-slate-500 focus:border-[#00f090] focus:outline-none transition"
+                      />
+                      {search && (
+                        <button
+                          type="button"
+                          onClick={() => setSearch('')}
+                          className="absolute right-3 top-3 text-slate-400 hover:text-white"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[11px] font-medium text-slate-400 hidden sm:inline">Ordenar:</span>
+                      <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value as SortOption)}
+                        className="w-full sm:w-auto rounded-xl border border-[#212633] bg-[#141822] px-3 py-2.5 text-xs font-semibold text-slate-200 focus:border-[#00f090] focus:outline-none cursor-pointer"
                       >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    )}
+                        <option value="POOL">Mayor Pozo</option>
+                        <option value="CLOSING_SOON">Cierre Próximo</option>
+                        <option value="POPULAR">Más Apuestas</option>
+                      </select>
+                    </div>
                   </div>
 
                   {/* Filtro de Estado */}
-                  <div className="flex rounded-xl border border-[#212633] bg-[#141822] p-1">
-                    {statusFilters.map((f) => (
-                      <button
-                        key={f.id}
-                        type="button"
-                        onClick={() => setStatusFilter(f.id)}
-                        className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
-                          statusFilter === f.id
-                            ? 'bg-[#00f090] text-slate-950 shadow-sm'
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        {f.label}
-                      </button>
-                    ))}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-[#1e2330]/50">
+                    <div className="flex flex-wrap gap-1 rounded-xl border border-[#212633] bg-[#141822] p-1">
+                      {statusFilters.map((f) => (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => setStatusFilter(f.id)}
+                          className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
+                            statusFilter === f.id
+                              ? 'bg-[#00f090] text-slate-950 shadow-sm'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-
-                  {/* Ordenamiento */}
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as SortOption)}
-                    className="rounded-xl border border-[#212633] bg-[#141822] px-3 py-2.5 text-xs font-semibold text-slate-200 focus:border-[#00f090] focus:outline-none cursor-pointer"
-                  >
-                    <option value="POOL">Mayor Pozo</option>
-                    <option value="CLOSING_SOON">Cierre Próximo</option>
-                    <option value="POPULAR">Más Apuestas</option>
-                  </select>
                 </div>
 
                 {/* Categorías en Carrusel Horizontal (Visible en tablets y móviles) */}

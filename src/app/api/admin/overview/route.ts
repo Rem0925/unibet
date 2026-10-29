@@ -15,6 +15,7 @@ import {
   mapPendingWithdrawal,
   mapTransaction,
   mapUserProfile,
+  metadataRecord,
   type AuditLogRow,
   type PendingDepositRow,
   type PendingWithdrawalRow,
@@ -97,7 +98,7 @@ export async function GET(request: NextRequest) {
         .limit(100),
       supabase
         .from('transactions')
-        .select('id, user_id, amount, reference_id, created_at')
+        .select('id, user_id, amount, reference_id, metadata, created_at')
         .eq('type', 'DEPOSIT')
         .eq('status', 'PENDING')
         .gte('created_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
@@ -126,7 +127,13 @@ export async function GET(request: NextRequest) {
       .filter((row) => !(row.type === 'DEPOSIT' && row.status !== 'COMPLETED'))
       .slice(0, 60);
     const pendingRows = (pendingData ?? []) as PendingWithdrawalRow[];
-    const pendingDepositRows = (pendingDepositData ?? []) as PendingDepositRow[];
+    // Filtrar para no mostrar intentos abandonados donde el usuario sólo abrió el QR y no transfirió
+    const pendingDepositRows = ((pendingDepositData ?? []) as (PendingDepositRow & { metadata?: unknown })[])
+      .filter((row) => {
+        const meta = metadataRecord(row.metadata);
+        return Boolean(meta.user_confirmed_payment || meta.user_checked_at);
+      })
+      .map((row) => row as PendingDepositRow);
     const auditRows = (auditData ?? []) as AuditLogRow[];
 
     const userIds = new Set<string>();

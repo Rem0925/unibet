@@ -70,6 +70,18 @@ export async function POST(request: NextRequest) {
       throw new ApiError('La orden de depósito no está pendiente', 400, 'DEPOSIT_NOT_PENDING');
     }
 
+    // Registrar que el usuario interactuó y solicitó la comprobación de su pago
+    await supabase
+      .from('transactions')
+      .update({
+        metadata: {
+          ...metadataRecord(tx.metadata),
+          user_confirmed_payment: true,
+          user_checked_at: new Date().toISOString(),
+        },
+      })
+      .eq('id', tx.id);
+
     if (!isBinanceConfigured()) {
       return NextResponse.json({
         success: false,

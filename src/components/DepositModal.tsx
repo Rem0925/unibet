@@ -290,60 +290,38 @@ export function DepositModal({
             </a>
           </div>
 
-          {/* Pay ID de la Casa */}
-          {order.adminPayId ? (
-            <div className="rounded-xl border border-[#1e2330] bg-[#141822] p-3.5">
+          {/* Datos para pago manual (Pay ID y Referencia) */}
+          <div className="rounded-xl border border-[#1e2330] bg-[#141822] p-3 text-xs space-y-2">
+            {order.adminPayId && (
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="block text-[11px] font-medium text-slate-400">
-                    Binance Pay ID de destino (Receptor):
-                  </span>
-                  <span className="font-mono text-base font-extrabold tracking-wider text-white">
-                    {order.adminPayId}
-                  </span>
+                  <span className="block text-[10px] font-medium text-slate-400">Binance Pay ID de destino (Receptor):</span>
+                  <span className="font-mono text-sm font-extrabold tracking-wider text-white">{order.adminPayId}</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => copyToClipboard(order.adminPayId ?? '', 'Binance Pay ID')}
-                  className="flex items-center gap-1.5 rounded-lg border border-[#2d3447] bg-[#1c2230] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#252c3e]"
+                  className="flex items-center gap-1.5 rounded-lg border border-[#2d3447] bg-[#1c2230] px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-[#252c3e]"
                 >
-                  <Copy className="h-3.5 w-3.5 text-[#00f090]" />
+                  <Copy className="h-3 w-3 text-[#00f090]" />
                   Copiar ID
                 </button>
               </div>
+            )}
+            <div className="flex items-center justify-between border-t border-[#1e2330] pt-2">
+              <div>
+                <span className="block text-[10px] text-slate-500">Referencia de orden</span>
+                <span className="font-mono text-[11px] font-semibold text-slate-300">{order.tradeNo}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => copyToClipboard(order.tradeNo, 'Referencia')}
+                className="flex items-center gap-1 rounded border border-[#2d3447] bg-[#1c2230] px-2 py-0.5 text-[10px] font-medium text-slate-300 transition hover:bg-[#252c3e] hover:text-white"
+              >
+                <Copy className="h-2.5 w-2.5" />
+                Copiar Ref
+              </button>
             </div>
-          ) : null}
-
-          {/* Pasos en Binance */}
-          <div className="space-y-2 rounded-xl border border-[#1e2330] bg-[#0d1017] p-3.5 text-xs text-slate-300">
-            <div className="flex items-center gap-2 font-semibold text-white">
-              <Smartphone className="h-4 w-4 text-[#00f090]" />
-              <span>Instrucciones de pago desde Binance:</span>
-            </div>
-            <ol className="list-inside list-decimal space-y-1.5 pl-1 text-[11px] text-slate-400">
-              <li>Abre tu app de Binance y entra a la sección <strong>Pay</strong>.</li>
-              <li>Toca en <strong>Enviar / Transferir</strong>.</li>
-              <li>Selecciona <strong>Binance ID / Pay ID</strong> e ingresa el ID de arriba.</li>
-              <li>Transfiere exactamente <strong className="text-white">${formatUsdt(gross)} USDT</strong>.</li>
-            </ol>
-          </div>
-
-          {/* Referencia de la Orden */}
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-[#1e2330] bg-[#141822] px-3.5 py-2.5 text-xs">
-            <div className="min-w-0">
-              <span className="block text-[11px] text-slate-500">Referencia de orden</span>
-              <span className="font-mono text-xs font-semibold text-slate-300 truncate block">
-                {order.tradeNo}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => copyToClipboard(order.tradeNo, 'Referencia')}
-              className="flex items-center gap-1.5 rounded-lg border border-[#2d3447] bg-[#1c2230] px-2.5 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-[#252c3e] hover:text-white"
-            >
-              <Copy className="h-3.5 w-3.5" />
-              Copiar Ref
-            </button>
           </div>
 
           {error ? (
