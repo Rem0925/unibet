@@ -31,6 +31,7 @@ interface AccountViewProps {
   loadingBets: boolean;
   loadingWallet: boolean;
   initialSubTab?: AccountSubTab;
+  onSubTabChange?: (subTab: AccountSubTab) => void;
   onRefreshProfile: () => Promise<UserProfile>;
   onDeposit: () => void;
   onWithdraw: () => void;
@@ -67,6 +68,7 @@ export function AccountView({
   loadingBets,
   loadingWallet,
   initialSubTab = 'BETS',
+  onSubTabChange,
   onRefreshProfile,
   onDeposit,
   onWithdraw,
@@ -81,6 +83,11 @@ export function AccountView({
       setActiveSubTab(initialSubTab);
     }
   }, [initialSubTab]);
+
+  const handleSelectSubTab = (tab: AccountSubTab) => {
+    setActiveSubTab(tab);
+    onSubTabChange?.(tab);
+  };
   const [betFilter, setBetFilter] = useState<'ALL' | BetStatus>('ALL');
   const [txFilter, setTxFilter] = useState<'ALL' | 'DEPOSIT' | 'WITHDRAW' | 'WINS'>('ALL');
 
@@ -260,46 +267,46 @@ export function AccountView({
               onClick={onWithdraw}
               className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#2d3447] bg-[#161a24] py-2.5 text-xs font-bold text-white transition hover:bg-[#1e2330]"
             >
-              <ArrowUpRight className="h-4 w-4 text-emerald-400" /> Retirar a Binance
+              <ArrowUpRight className="h-4 w-4 text-emerald-400" /> Retirar USDT
             </button>
           </div>
         </div>
       </div>
 
       {/* Navegación de Sub-Pestañas */}
-      <div className="flex border-b border-[#1e2330]">
+      <div className="flex border-b border-[#1e2330] overflow-x-auto scrollbar-none gap-2">
         <button
           type="button"
-          onClick={() => setActiveSubTab('BETS')}
-          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-semibold transition ${
+          onClick={() => handleSelectSubTab('BETS')}
+          className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 sm:px-5 py-3 text-xs sm:text-sm font-semibold transition shrink-0 ${
             activeSubTab === 'BETS'
               ? 'border-[#00f090] text-white'
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
-          <Ticket className="h-4 w-4" /> Mis Apuestas ({bets.length})
+          <Ticket className="h-4 w-4 text-[#00f090]" /> Apuestas ({bets.length})
         </button>
         <button
           type="button"
-          onClick={() => setActiveSubTab('TRANSACTIONS')}
-          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-semibold transition ${
+          onClick={() => handleSelectSubTab('TRANSACTIONS')}
+          className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 sm:px-5 py-3 text-xs sm:text-sm font-semibold transition shrink-0 ${
             activeSubTab === 'TRANSACTIONS'
               ? 'border-[#00f090] text-white'
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
-          <Receipt className="h-4 w-4" /> Movimientos ({transactions.length})
+          <Receipt className="h-4 w-4 text-emerald-400" /> Movimientos ({transactions.length})
         </button>
         <button
           type="button"
-          onClick={() => setActiveSubTab('SETTINGS')}
-          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-semibold transition ${
+          onClick={() => handleSelectSubTab('SETTINGS')}
+          className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 sm:px-5 py-3 text-xs sm:text-sm font-semibold transition shrink-0 ${
             activeSubTab === 'SETTINGS'
               ? 'border-[#00f090] text-white'
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
-          <Pencil className="h-4 w-4" /> Ajustes de Cuenta
+          <Pencil className="h-4 w-4 text-slate-400" /> Ajustes
         </button>
       </div>
 

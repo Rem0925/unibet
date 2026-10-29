@@ -232,29 +232,33 @@ export function AdminDashboard({
 
       {/* Tarjetas de Métricas */}
       {stats ? (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
           <MetricCard
             icon={<Wallet className="h-4 w-4" />}
             label="Saldos de usuarios"
+            mobileLabel="Saldos usuarios"
             value={`$${formatUsdt(stats.totalUserBalances)}`}
             hint={`${stats.totalUsers} cuentas registradas`}
           />
           <MetricCard
             icon={<CircleDollarSign className="h-4 w-4" />}
             label="Pozos activos"
+            mobileLabel="Pozos activos"
             value={`$${formatUsdt(stats.activePools)}`}
             hint={`${stats.openMarkets} mercados abiertos`}
           />
           <MetricCard
             icon={<Clock className="h-4 w-4" />}
             label="Retiros pendientes"
+            mobileLabel="Retiros pend."
             value={`$${formatUsdt(stats.pendingWithdrawals)}`}
-            hint={`${overview?.pendingWithdrawals.length ?? 0} solicitudes por revisar`}
+            hint={`${overview?.pendingWithdrawals.length ?? 0} solicitudes`}
             tone="text-[#fbbf24]"
           />
           <MetricCard
             icon={<Landmark className="h-4 w-4" />}
             label="Saldo esperado Binance"
+            mobileLabel="Saldo Binance"
             value={`$${formatUsdt(stats.expectedBinanceBalance)}`}
             hint="Saldos + pozos + retiros"
             tone="text-[#7dd3fc]"
@@ -262,6 +266,7 @@ export function AdminDashboard({
           <MetricCard
             icon={<Receipt className="h-4 w-4" />}
             label="Comisiones de recarga"
+            mobileLabel="Comisión 1.5%"
             value={`$${formatUsdt(stats.houseFees)}`}
             hint="1.5% acumulado"
             tone="text-[#00f090]"
@@ -269,6 +274,7 @@ export function AdminDashboard({
           <MetricCard
             icon={<Trophy className="h-4 w-4" />}
             label="Ganancias casa"
+            mobileLabel="Ganancias casa"
             value={`$${formatUsdt(stats.houseWins)}`}
             hint="Pozos huérfanos / batacazos"
             tone="text-[#00f090]"
@@ -276,6 +282,7 @@ export function AdminDashboard({
           <MetricCard
             icon={<Users className="h-4 w-4" />}
             label="Ganancias creadores"
+            mobileLabel="Gan. creador"
             value={`$${formatUsdt(stats.creatorWins)}`}
             hint="30% acumulado por crear"
             tone="text-[#c084fc]"
@@ -283,29 +290,30 @@ export function AdminDashboard({
           <MetricCard
             icon={<CircleDollarSign className="h-4 w-4" />}
             label="Recargas netas"
+            mobileLabel="Recargas"
             value={`$${formatUsdt(stats.totalDeposits)}`}
             hint={`${stats.activeBets} apuestas activas`}
           />
         </div>
       ) : loading ? (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
           {Array.from({ length: 8 }).map((_, index) => (
             <div
               key={index}
-              className="h-24 animate-pulse rounded-2xl border border-[#1e2330] bg-[#11141c]"
+              className="h-20 sm:h-24 animate-pulse rounded-2xl border border-[#1e2330] bg-[#11141c]"
             />
           ))}
         </div>
       ) : null}
 
       {/* Tabs Selector */}
-      <div className="flex flex-wrap gap-1.5 rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-1.5">
+      <div className="flex overflow-x-auto scrollbar-none gap-1.5 rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-1.5">
         {tabs.map((item) => (
           <button
             key={item.id}
             type="button"
             onClick={() => setTab(item.id)}
-            className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition ${
+            className={`flex items-center gap-1.5 shrink-0 whitespace-nowrap rounded-xl px-3 py-2 text-xs font-semibold transition ${
               tab === item.id
                 ? 'bg-[#181c26] text-white shadow-sm ring-1 ring-[#283042]'
                 : 'text-slate-400 hover:text-white'
@@ -389,24 +397,35 @@ export function AdminDashboard({
 function MetricCard({
   icon,
   label,
+  mobileLabel,
   value,
   hint,
   tone = 'text-white',
 }: {
   icon: React.ReactNode;
   label: string;
+  mobileLabel?: string;
   value: string;
   hint: string;
   tone?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-4">
-      <div className="mb-1.5 flex items-center gap-1.5 text-xs text-slate-400">
-        <span className="text-slate-400">{icon}</span>
-        <span className="truncate font-medium">{label}</span>
+    <div className="rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-3 sm:p-4">
+      <div className="mb-1 flex items-center gap-1.5 text-xs text-slate-400">
+        <span className="shrink-0 text-slate-400">{icon}</span>
+        <span className="truncate font-medium">
+          {mobileLabel ? (
+            <>
+              <span className="sm:hidden">{mobileLabel}</span>
+              <span className="hidden sm:inline">{label}</span>
+            </>
+          ) : (
+            label
+          )}
+        </span>
       </div>
-      <div className={`font-mono text-lg font-bold tabular-nums ${tone}`}>{value}</div>
-      <div className="mt-1 truncate text-xs text-slate-500">{hint}</div>
+      <div className={`font-mono text-base sm:text-lg font-bold tabular-nums ${tone}`}>{value}</div>
+      <div className="mt-0.5 truncate text-[11px] sm:text-xs text-slate-500">{hint}</div>
     </div>
   );
 }
@@ -549,7 +568,8 @@ function WithdrawalsTab({
                       className="flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-xs font-bold text-amber-300 transition hover:bg-amber-500/25"
                     >
                       <ExternalLink className="h-3.5 w-3.5" />
-                      Abrir Retiros USDT Binance
+                      <span className="sm:hidden">Binance BSC</span>
+                      <span className="hidden sm:inline">Abrir Retiros USDT Binance</span>
                     </a>
                   ) : (
                     <a
@@ -559,7 +579,8 @@ function WithdrawalsTab({
                       className="flex items-center gap-1.5 rounded-xl border border-[#F0B90B]/40 bg-[#F0B90B]/15 px-3 py-1.5 text-xs font-bold text-[#F0B90B] transition hover:bg-[#F0B90B]/25"
                     >
                       <ExternalLink className="h-3.5 w-3.5" />
-                      Abrir Binance Pay
+                      <span className="sm:hidden">Binance Pay</span>
+                      <span className="hidden sm:inline">Abrir Binance Pay</span>
                     </a>
                   )}
 
@@ -576,7 +597,8 @@ function WithdrawalsTab({
                     className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-400 transition hover:bg-emerald-500/20 disabled:opacity-50"
                   >
                     {isBusyComplete ? <Spinner className="h-3 w-3" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                    Aprobar y Completar
+                    <span className="sm:hidden">Aprobar</span>
+                    <span className="hidden sm:inline">Aprobar y Completar</span>
                   </button>
 
                   {/* Botón Reembolsar */}
@@ -727,14 +749,16 @@ function DepositsTab({
                     ) : (
                       <RefreshCw className="h-3 w-3" />
                     )}
-                    Verificar en Binance
+                    <span className="sm:hidden">Verificar</span>
+                    <span className="hidden sm:inline">Verificar en Binance</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setDepositConfirm(deposit.referenceId)}
                     className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs font-bold text-rose-400 transition hover:bg-rose-500/20"
                   >
-                    Descartar intento
+                    <span className="sm:hidden">Descartar</span>
+                    <span className="hidden sm:inline">Descartar intento</span>
                   </button>
                 </div>
               </div>
@@ -888,7 +912,8 @@ function UsersTab({
                     className="flex items-center gap-1.5 rounded-xl border border-[#2d3447] bg-[#161a24] px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-[#1e2330] hover:text-white"
                   >
                     <Eye className="h-3.5 w-3.5 text-[#00f090]" />
-                    <span>Movimientos</span>
+                    <span className="sm:hidden">Ver</span>
+                    <span className="hidden sm:inline">Movimientos</span>
                   </button>
 
                   <select

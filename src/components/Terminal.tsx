@@ -874,6 +874,7 @@ export function Terminal({
             loadingBets={betsLoading}
             loadingWallet={walletLoading}
             initialSubTab={accountSubTab}
+            onSubTabChange={setAccountSubTab}
             onRefreshProfile={refreshProfile}
             onDeposit={() => setShowDeposit(true)}
             onWithdraw={() => setShowWithdraw(true)}
@@ -920,6 +921,7 @@ export function Terminal({
       {/* Navegación móvil inferior */}
       <MobileNav
         activeTab={effectiveTab}
+        accountSubTab={accountSubTab}
         onNavigate={handleNavigate}
         onCreate={() => setShowCreate(true)}
         role={role}

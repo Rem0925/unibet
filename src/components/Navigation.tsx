@@ -9,6 +9,7 @@ import {
   Plus,
   Settings,
   ShieldCheck,
+  Ticket,
   TrendingUp,
   User,
   Wallet,
@@ -227,11 +228,13 @@ export function Header({
 
 export function MobileNav({
   activeTab,
+  accountSubTab,
   onNavigate,
   onCreate,
   role,
 }: {
   activeTab: AppTab;
+  accountSubTab?: AccountSubTab;
   onNavigate: (tab: AppTab, subTab?: AccountSubTab) => void;
   onCreate: () => void;
   role: Role;
@@ -240,49 +243,94 @@ export function MobileNav({
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 flex h-16 items-center justify-around border-t border-[#1e2330] bg-[#0c0d12]/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-md sm:hidden">
+      {/* 1. Mercados */}
       <button
         type="button"
         onClick={() => onNavigate('EXPLORE')}
-        className={`flex flex-col items-center gap-1 py-1 text-[11px] font-semibold transition ${
-          activeTab === 'EXPLORE' ? 'text-[#00f090]' : 'text-slate-400'
+        className={`flex flex-col items-center gap-1 py-1 text-[10px] font-semibold transition ${
+          activeTab === 'EXPLORE' ? 'text-[#00f090]' : 'text-slate-400 hover:text-slate-200'
         }`}
       >
         <TrendingUp className="h-4 w-4" />
         <span>Mercados</span>
       </button>
 
+      {/* 2. Apuestas */}
+      <button
+        type="button"
+        onClick={() => onNavigate('ACCOUNT', 'BETS')}
+        className={`flex flex-col items-center gap-1 py-1 text-[10px] font-semibold transition ${
+          activeTab === 'ACCOUNT' && accountSubTab === 'BETS'
+            ? 'text-[#00f090]'
+            : 'text-slate-400 hover:text-slate-200'
+        }`}
+      >
+        <Ticket className="h-4 w-4" />
+        <span>Apuestas</span>
+      </button>
+
+      {/* 3. Botón Central [+] Crear */}
       <button
         type="button"
         onClick={onCreate}
-        className="flex flex-col items-center gap-1 py-1 text-[11px] font-semibold text-slate-400 hover:text-white"
+        aria-label="Crear mercado"
+        className="flex flex-col items-center gap-1 py-1 text-[10px] font-semibold text-slate-400 hover:text-white"
       >
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#00f090] text-slate-950 shadow-md">
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#00f090] text-slate-950 shadow-lg shadow-[#00f090]/20 active:scale-95 transition-transform">
           <Plus className="h-5 w-5" />
         </div>
       </button>
 
-      {isStaff ? (
+      {/* 4. Tab 4 según Rol: Admin / Mod / Billetera */}
+      {role === 'ADMIN' ? (
+        <button
+          type="button"
+          onClick={() => onNavigate('ADMIN')}
+          className={`flex flex-col items-center gap-1 py-1 text-[10px] font-semibold transition ${
+            activeTab === 'ADMIN' ? 'text-[#fbbf24]' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Layers className="h-4 w-4" />
+          <span>Admin</span>
+        </button>
+      ) : role === 'MODERATOR' ? (
         <button
           type="button"
           onClick={() => onNavigate('MODERATION')}
-          className={`flex flex-col items-center gap-1 py-1 text-[11px] font-semibold transition ${
-            activeTab === 'MODERATION' ? 'text-purple-400' : 'text-slate-400'
+          className={`flex flex-col items-center gap-1 py-1 text-[10px] font-semibold transition ${
+            activeTab === 'MODERATION' ? 'text-purple-400' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <ShieldCheck className="h-4 w-4" />
           <span>Mod</span>
         </button>
-      ) : null}
+      ) : (
+        <button
+          type="button"
+          onClick={() => onNavigate('ACCOUNT', 'TRANSACTIONS')}
+          className={`flex flex-col items-center gap-1 py-1 text-[10px] font-semibold transition ${
+            activeTab === 'ACCOUNT' && accountSubTab === 'TRANSACTIONS'
+              ? 'text-[#00f090]'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Wallet className="h-4 w-4" />
+          <span>Billetera</span>
+        </button>
+      )}
 
+      {/* 5. Perfil / Ajustes */}
       <button
         type="button"
-        onClick={() => onNavigate('ACCOUNT')}
-        className={`flex flex-col items-center gap-1 py-1 text-[11px] font-semibold transition ${
-          activeTab === 'ACCOUNT' ? 'text-[#00f090]' : 'text-slate-400'
+        onClick={() => onNavigate('ACCOUNT', 'SETTINGS')}
+        className={`flex flex-col items-center gap-1 py-1 text-[10px] font-semibold transition ${
+          activeTab === 'ACCOUNT' && accountSubTab === 'SETTINGS'
+            ? 'text-[#00f090]'
+            : 'text-slate-400 hover:text-slate-200'
         }`}
       >
         <User className="h-4 w-4" />
-        <span>Cuenta</span>
+        <span>Perfil</span>
       </button>
     </nav>
   );
