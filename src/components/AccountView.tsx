@@ -38,6 +38,7 @@ interface AccountViewProps {
   onLogout: () => void;
   showToast: (message: string, type?: 'success' | 'warn' | 'error') => void;
   onExplore: () => void;
+  onSelectMarket?: (marketId: string) => void;
 }
 
 export type AccountSubTab = 'BETS' | 'TRANSACTIONS' | 'SETTINGS';
@@ -75,6 +76,7 @@ export function AccountView({
   onLogout,
   showToast,
   onExplore,
+  onSelectMarket,
 }: AccountViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<AccountSubTab>(initialSubTab);
 
@@ -375,7 +377,9 @@ export function AccountView({
                 return (
                   <div
                     key={bet.id}
-                    className="flex flex-col justify-between gap-3 rounded-xl border border-[#212633] bg-[#12151c] p-4 sm:flex-row sm:items-center"
+                    onClick={() => onSelectMarket?.(bet.marketId)}
+                    className="group flex flex-col justify-between gap-3 rounded-xl border border-[#212633] bg-[#12151c] p-4 sm:flex-row sm:items-center hover:border-[#00f090]/50 hover:bg-[#151a24] transition duration-150 cursor-pointer shadow-sm active:scale-[0.99]"
+                    title="Clic para ver este mercado en vivo"
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -386,7 +390,7 @@ export function AccountView({
                           {formatShortDate(bet.createdAt)}
                         </span>
                       </div>
-                      <h4 className="mt-1 truncate text-sm font-bold text-white">
+                      <h4 className="mt-1 truncate text-sm font-bold text-white group-hover:text-emerald-300 transition">
                         {bet.marketTitle}
                       </h4>
                       <p className="mt-0.5 text-xs text-slate-300">
@@ -397,7 +401,7 @@ export function AccountView({
                       </p>
                     </div>
 
-                    <div className="flex items-center justify-between border-t border-[#1e2330] pt-2 sm:border-0 sm:pt-0 sm:text-right">
+                    <div className="flex items-center justify-between border-t border-[#1e2330] pt-2 sm:border-0 sm:pt-0 sm:text-right gap-3">
                       <span className="text-xs text-slate-400 sm:hidden">Monto apostado</span>
                       <div>
                         <div className="font-mono text-sm font-bold text-white">
@@ -408,6 +412,9 @@ export function AccountView({
                             Cobrado: +${formatUsdt(bet.payoutAmount)} USDT
                           </div>
                         ) : null}
+                      </div>
+                      <div className="hidden sm:flex items-center text-slate-500 group-hover:text-[#00f090] transition">
+                        <ArrowUpRight className="h-4 w-4" />
                       </div>
                     </div>
                   </div>
@@ -530,7 +537,7 @@ export function AccountView({
                   value={newUsername}
                   onChange={(e) => setNewUsername(e.target.value)}
                   maxLength={24}
-                  className="w-full rounded-lg border border-[#2d3447] bg-[#0c0d12] py-2 pl-7 pr-3 text-sm text-white focus:border-[#00f090] focus:outline-none"
+                  className="w-full rounded-lg border border-[#2d3447] bg-[#0c0d12] py-2 pl-7 pr-3 text-base sm:text-sm text-white focus:border-[#00f090] focus:outline-none transition-colors"
                   placeholder="ejemplo123"
                 />
               </div>
@@ -539,7 +546,7 @@ export function AccountView({
             <button
               type="submit"
               disabled={savingUsername || newUsername.trim() === profile.username}
-              className="mt-4 flex items-center justify-center gap-1.5 rounded-lg bg-[#00f090] px-4 py-2 text-xs font-bold text-black transition hover:bg-[#00d681] disabled:opacity-40"
+              className="mt-4 flex items-center justify-center gap-1.5 rounded-lg bg-[#00f090] px-4 py-2 text-xs font-bold text-black transition hover:bg-[#00d681] active:scale-[0.98] disabled:opacity-40"
             >
               {savingUsername ? <Spinner className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
               Guardar usuario
@@ -567,7 +574,7 @@ export function AccountView({
                 value={newBinanceUid}
                 onChange={(e) => setNewBinanceUid(e.target.value.replace(/[^0-9]/g, ''))}
                 maxLength={10}
-                className="mt-1 w-full rounded-lg border border-[#2d3447] bg-[#0c0d12] px-3 py-2 text-sm text-white focus:border-[#00f090] focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-[#2d3447] bg-[#0c0d12] px-3 py-2 text-base sm:text-sm font-mono text-white tabular-nums focus:border-[#00f090] focus:outline-none transition-colors"
                 placeholder="Ej. 182948291"
               />
             </div>
@@ -575,7 +582,7 @@ export function AccountView({
             <button
               type="submit"
               disabled={savingBinance || newBinanceUid.trim() === (profile.binanceUid ?? '')}
-              className="mt-4 flex items-center justify-center gap-1.5 rounded-lg border border-[#2d3447] bg-[#161a24] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#1e2330] disabled:opacity-40"
+              className="mt-4 flex items-center justify-center gap-1.5 rounded-lg border border-[#2d3447] bg-[#161a24] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#1e2330] active:scale-[0.98] disabled:opacity-40"
             >
               {savingBinance ? <Spinner className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5 text-[#00f090]" />}
               Guardar Binance UID

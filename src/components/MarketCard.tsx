@@ -1,6 +1,7 @@
 'use client';
 
-import { Clock, Copy, Lock, Trophy, Users } from 'lucide-react';
+import { useState } from 'react';
+import { Check, Clock, Copy, Lock, Share2, Trophy, Users } from 'lucide-react';
 import { useNow } from '@/hooks/useNow';
 import { formatShortDate, formatUsdt, timeUntil } from '@/lib/format';
 import type { MarketSummary } from '@/lib/types';
@@ -23,12 +24,33 @@ export function MarketCard({
   onSelectOption: (market: MarketSummary, option: string) => void;
   onCopyAccessCode?: (market: MarketSummary) => void;
 }) {
+  const [copied, setCopied] = useState(false);
   const now = useNow();
   const canBet = market.status === 'OPEN' && new Date(market.closeTime).getTime() > now;
   const badge = statusBadge[market.status] ?? statusBadge.OPEN;
 
+  const handleShare = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onCopyAccessCode && market.accessCode) {
+      onCopyAccessCode(market);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+      return;
+    }
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const shareText = `🎯 Predicción en UniBet: "${market.title}"\n🔗 ${origin}/?m=${market.id}`;
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      void navigator.clipboard.writeText(shareText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    }
+  };
+
   return (
-    <article className="group flex flex-col justify-between rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-4 shadow-sm transition hover:border-[#2f374a] hover:shadow-xl hover:shadow-black/50">
+    <article
+      id={`market-${market.id}`}
+      className="group flex flex-col justify-between rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-4 shadow-sm transition hover:border-[#2f374a] hover:shadow-xl hover:shadow-black/50 scroll-mt-24"
+    >
       <div>
         {/* Cabecera: Categoría, Visibilidad y Estado */}
         <div className="mb-3 flex items-center justify-between gap-2 text-xs">
@@ -50,21 +72,6 @@ export function MarketCard({
               </span>
             ) : null}
 
-            {market.accessCode && onCopyAccessCode ? (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onCopyAccessCode(market);
-                }}
-                className="flex items-center gap-1 rounded-lg border border-purple-500/40 bg-purple-500/15 px-2 py-0.5 text-[10px] font-mono font-bold text-purple-300 hover:bg-purple-500/25 transition cursor-pointer"
-                title="Copiar código de acceso y enlace"
-              >
-                <Copy className="h-2.5 w-2.5" />
-                <span>{market.accessCode}</span>
-              </button>
-            ) : null}
-
             {market.status === 'RESOLVED' && market.winningOption ? (
               <span className="flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-400">
                 <Trophy className="h-3 w-3" />
@@ -72,18 +79,38 @@ export function MarketCard({
               </span>
             ) : null}
           </div>
-          <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${badge.style}`}>
-            {badge.label}
-          </span>
+
+          <div className="flex items-center gap-1.5">
+            <span className={`flex items-center gap-1.5 shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${badge.style}`}>
+              {market.status === 'OPEN' && (
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              )}
+              {badge.label}
+            </span>
+
+            <button
+              type="button"
+              onClick={handleShare}
+              className="flex items-center gap-1 rounded-lg border border-[#212633] bg-[#141822] px-2 py-0.5 text-[10px] font-semibold text-slate-300 hover:border-slate-500 hover:text-white active:scale-95 transition cursor-pointer"
+              title={market.accessCode ? 'Copiar código y enlace' : 'Compartir enlace del evento'}
+            >
+              {copied ? (
+                <Check className="h-2.5 w-2.5 text-emerald-400" />
+              ) : (
+                <Share2 className="h-2.5 w-2.5 text-slate-400" />
+              )}
+              <span>{copied ? '¡Copiado!' : market.accessCode ? market.accessCode : 'Compartir'}</span>
+            </button>
+          </div>
         </div>
 
         {/* Título del evento */}
-        <h3 className="mb-2 text-base font-bold leading-snug text-white transition group-hover:text-emerald-300">
+        <h3 className="mb-2 text-base font-bold leading-snug text-white transition group-hover:text-emerald-300 break-words">
           {market.title}
         </h3>
 
         {market.description ? (
-          <p className="mb-3 line-clamp-2 text-xs text-slate-400 leading-relaxed">
+          <p className="mb-3 line-clamp-2 text-xs text-slate-400 leading-relaxed break-words">
             {market.description}
           </p>
         ) : null}
@@ -121,7 +148,7 @@ export function MarketCard({
                 type="button"
                 disabled={!canBet}
                 onClick={() => onSelectOption(market, option)}
-                className={`flex w-full items-center justify-between rounded-xl border p-2.5 text-left transition ${
+                className={`flex w-full items-center justify-between rounded-xl border p-2.5 text-left transition duration-150 active:scale-[0.98] ${
                   isWinning
                     ? 'border-[#00f090] bg-[#00f090]/15 text-white ring-1 ring-[#00f090]/30'
                     : canBet
@@ -131,10 +158,10 @@ export function MarketCard({
               >
                 <div className="min-w-0 pr-2">
                   <span className="block truncate text-xs font-semibold text-white">{option}</span>
-                  <span className="text-[10px] text-slate-400">{optionOdds.percentage} del pozo</span>
+                  <span className="text-[10px] text-slate-400 tabular-nums">{optionOdds.percentage} del pozo</span>
                 </div>
                 <div className="shrink-0 rounded-lg bg-[#0c0d12] px-2.5 py-1 text-center border border-[#212633] group-hover:border-[#00f090]/40">
-                  <span className="font-mono text-xs font-bold text-[#00f090]">
+                  <span className="font-mono text-xs font-bold text-[#00f090] tabular-nums">
                     {optionOdds.multiplier}
                   </span>
                 </div>
@@ -148,14 +175,14 @@ export function MarketCard({
       <div className="flex items-center justify-between border-t border-[#1e2330] pt-3 text-xs text-slate-400">
         <div className="flex items-center gap-3">
           <span>
-            Pozo: <strong className="font-mono font-bold text-white">${formatUsdt(market.totalPool)} USDT</strong>
+            Pozo: <strong className="font-mono font-bold text-white tabular-nums">${formatUsdt(market.totalPool)} USDT</strong>
           </span>
-          <span className="flex items-center gap-1 text-[11px] text-slate-500">
+          <span className="flex items-center gap-1 text-[11px] text-slate-500 tabular-nums">
             <Users className="h-3 w-3" /> {market.betCount}
           </span>
         </div>
 
-        <div className="flex items-center gap-1 text-[11px] text-slate-400">
+        <div className="flex items-center gap-1 text-[11px] text-slate-400 tabular-nums">
           <Clock className="h-3 w-3 text-slate-500" />
           <span>
             {market.status === 'OPEN' ? timeUntil(market.closeTime, now) : formatShortDate(market.closeTime)}

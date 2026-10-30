@@ -21,11 +21,15 @@ export function CreateMarketModal({
   onClose,
   onCreated,
   showToast,
+  onOpenGroups,
+  initialGroupId,
 }: {
   availableCategories?: string[];
   onClose: () => void;
   onCreated: () => Promise<void> | void;
   showToast: (message: string, type?: 'success' | 'warn' | 'error') => void;
+  onOpenGroups?: () => void;
+  initialGroupId?: string;
 }) {
   const defaultCloseTime = () => {
     const next = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -48,8 +52,10 @@ export function CreateMarketModal({
   const [resolutionSource, setResolutionSource] = useState('');
 
   // Audience & Visibility
-  const [visibility, setVisibility] = useState<MarketVisibility>('PUBLIC');
-  const [groupId, setGroupId] = useState<string>('');
+  const [visibility, setVisibility] = useState<MarketVisibility>(
+    initialGroupId ? 'GROUP' : 'PUBLIC'
+  );
+  const [groupId, setGroupId] = useState<string>(initialGroupId || '');
   const [accessCode, setAccessCode] = useState<string>('');
   const [groups, setGroups] = useState<GroupSummary[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(false);
@@ -187,7 +193,7 @@ export function CreateMarketModal({
             <button
               type="button"
               onClick={() => setVisibility('PUBLIC')}
-              className={`flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition ${
+              className={`flex flex-col items-start gap-1 p-2.5 sm:p-3 rounded-xl border text-left transition active:scale-[0.98] ${
                 visibility === 'PUBLIC'
                   ? 'border-[#00f090] bg-[#00f090]/10 ring-1 ring-[#00f090]/30'
                   : 'border-[#212633] bg-[#141822] hover:border-slate-500'
@@ -210,7 +216,7 @@ export function CreateMarketModal({
             <button
               type="button"
               onClick={() => setVisibility('GROUP')}
-              className={`flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition ${
+              className={`flex flex-col items-start gap-1 p-2.5 sm:p-3 rounded-xl border text-left transition active:scale-[0.98] ${
                 visibility === 'GROUP'
                   ? 'border-sky-400 bg-sky-500/10 ring-1 ring-sky-400/30'
                   : 'border-[#212633] bg-[#141822] hover:border-slate-500'
@@ -233,7 +239,7 @@ export function CreateMarketModal({
             <button
               type="button"
               onClick={() => setVisibility('PRIVATE_CODE')}
-              className={`flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition ${
+              className={`flex flex-col items-start gap-1 p-2.5 sm:p-3 rounded-xl border text-left transition active:scale-[0.98] ${
                 visibility === 'PRIVATE_CODE'
                   ? 'border-purple-400 bg-purple-500/10 ring-1 ring-purple-400/30'
                   : 'border-[#212633] bg-[#141822] hover:border-slate-500'
@@ -262,25 +268,50 @@ export function CreateMarketModal({
               {loadingGroups ? (
                 <div className="h-9 animate-pulse rounded-lg bg-[#141822]" />
               ) : groups.length === 0 ? (
-                <div className="text-xs text-slate-400 space-y-1">
-                  <p className="text-amber-400 font-semibold">
+                <div className="space-y-2 rounded-xl border border-dashed border-sky-500/30 bg-[#0c0d12]/60 p-3 text-xs text-slate-400">
+                  <p className="font-semibold text-amber-400">
                     No perteneces a ningún grupo aprobado todavía.
                   </p>
-                  <p>Crea un grupo primero o únete a uno para poder publicar apuestas de grupo.</p>
+                  <p className="text-[11px] leading-relaxed">
+                    Crea un grupo para tus amigos o únete con un código de invitación para desbloquear apuestas privadas de grupo.
+                  </p>
+                  {onOpenGroups ? (
+                    <button
+                      type="button"
+                      onClick={onOpenGroups}
+                      className="flex items-center gap-1.5 rounded-lg bg-sky-400 px-3 py-1.5 text-xs font-bold text-slate-950 transition hover:bg-sky-300 active:scale-95 cursor-pointer"
+                    >
+                      <Users className="h-3.5 w-3.5" />
+                      <span>Crear o unirse a un grupo</span>
+                    </button>
+                  ) : null}
                 </div>
               ) : (
-                <select
-                  id="group-select"
-                  value={groupId}
-                  onChange={(e) => setGroupId(e.target.value)}
-                  className="w-full rounded-lg border border-[#212633] bg-[#0c0d12] px-3 py-2 text-xs font-semibold text-white focus:border-sky-400 focus:outline-none cursor-pointer"
-                >
-                  {groups.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.name} ({g.memberCount} miembros)
-                    </option>
-                  ))}
-                </select>
+                <div className="space-y-1.5">
+                  <select
+                    id="group-select"
+                    value={groupId}
+                    onChange={(e) => setGroupId(e.target.value)}
+                    className="w-full rounded-lg border border-[#212633] bg-[#0c0d12] px-3 py-2.5 text-base sm:text-xs font-semibold text-white focus:border-sky-400 focus:outline-none cursor-pointer"
+                  >
+                    {groups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name} ({g.memberCount} miembros)
+                      </option>
+                    ))}
+                  </select>
+                  {onOpenGroups ? (
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={onOpenGroups}
+                        className="text-[11px] font-semibold text-sky-400 hover:underline cursor-pointer"
+                      >
+                        + Gestionar mis grupos
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               )}
             </div>
           ) : null}
@@ -298,7 +329,7 @@ export function CreateMarketModal({
                 value={accessCode}
                 onChange={(e) => setAccessCode(e.target.value.toUpperCase())}
                 placeholder="Ej: FINAL2026 (o deja en blanco para generar uno aleatorio)"
-                className="w-full rounded-lg border border-[#212633] bg-[#0c0d12] px-3 py-2 font-mono text-xs font-bold text-white uppercase focus:border-purple-400 focus:outline-none"
+                className="w-full rounded-lg border border-[#212633] bg-[#0c0d12] px-3 py-2.5 font-mono text-base sm:text-xs font-bold text-white uppercase focus:border-purple-400 focus:outline-none"
               />
               <p className="text-[11px] text-slate-400">
                 Al crear el evento se generará un enlace directo que podrás compartir con tus amigos para que puedan apostar.
@@ -319,7 +350,7 @@ export function CreateMarketModal({
             onChange={(e) => setTitle(e.target.value)}
             maxLength={200}
             required
-            className="w-full rounded-lg border border-[#2d3447] bg-[#0c0d12] px-3 py-2 text-sm text-white focus:border-[#00f090] focus:outline-none"
+            className="w-full rounded-lg border border-[#2d3447] bg-[#0c0d12] px-3 py-2.5 text-base sm:text-sm text-white focus:border-[#00f090] focus:outline-none"
             placeholder="Ej: ¿Quién gana el clásico universitario?"
           />
         </div>
@@ -340,7 +371,7 @@ export function CreateMarketModal({
                     setCategory(cat);
                     setIsCustomCategory(false);
                   }}
-                  className={`rounded-lg border px-3 py-1 text-xs font-semibold transition ${
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition active:scale-95 ${
                     active
                       ? 'border-[#00f090] bg-[#00f090]/15 text-[#00f090]'
                       : 'border-[#2d3447] bg-[#141822] text-slate-300 hover:border-slate-500'
@@ -353,7 +384,7 @@ export function CreateMarketModal({
             <button
               type="button"
               onClick={() => setIsCustomCategory(true)}
-              className={`rounded-lg border px-3 py-1 text-xs font-semibold transition ${
+              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition active:scale-95 ${
                 isCustomCategory
                   ? 'border-[#00f090] bg-[#00f090]/15 text-[#00f090]'
                   : 'border-[#2d3447] bg-[#141822] text-slate-300 hover:border-slate-500'
@@ -370,7 +401,7 @@ export function CreateMarketModal({
               onChange={(e) => setCustomCategoryInput(e.target.value.toUpperCase())}
               maxLength={30}
               autoFocus
-              className="mt-2 w-full rounded-lg border border-[#00f090]/50 bg-[#0c0d12] px-3 py-2 text-xs font-bold text-white focus:border-[#00f090] focus:outline-none"
+              className="mt-2 w-full rounded-lg border border-[#00f090]/50 bg-[#0c0d12] px-3 py-2.5 text-base sm:text-xs font-bold text-white focus:border-[#00f090] focus:outline-none"
               placeholder="Escribe el nombre de la categoría (Ej: POLÍTICA, FIESTA...)"
             />
           ) : null}
@@ -386,7 +417,7 @@ export function CreateMarketModal({
               <button
                 type="button"
                 onClick={addOption}
-                className="flex items-center gap-1 text-xs font-semibold text-[#00f090] hover:underline"
+                className="flex items-center gap-1 text-xs font-semibold text-[#00f090] hover:underline active:scale-95"
               >
                 <Plus className="h-3.5 w-3.5" /> Agregar opción
               </button>
@@ -401,7 +432,7 @@ export function CreateMarketModal({
                   value={opt}
                   onChange={(e) => updateOption(i, e.target.value)}
                   maxLength={50}
-                  className="flex-1 rounded-lg border border-[#2d3447] bg-[#0c0d12] px-3 py-2 text-xs text-white focus:border-[#00f090] focus:outline-none"
+                  className="flex-1 rounded-lg border border-[#2d3447] bg-[#0c0d12] px-3 py-2.5 text-base sm:text-xs text-white focus:border-[#00f090] focus:outline-none"
                   placeholder={`Opción ${i + 1}`}
                   required
                 />
@@ -409,7 +440,7 @@ export function CreateMarketModal({
                   <button
                     type="button"
                     onClick={() => removeOption(i)}
-                    className="p-1.5 text-slate-500 transition hover:text-red-400"
+                    className="p-2 text-slate-500 transition hover:text-red-400 active:scale-95"
                     aria-label="Eliminar opción"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -430,7 +461,7 @@ export function CreateMarketModal({
             type="datetime-local"
             value={closeTime}
             onChange={(e) => setCloseTime(e.target.value)}
-            className="w-full rounded-lg border border-[#2d3447] bg-[#0c0d12] px-3 py-2 text-xs text-white focus:border-[#00f090] focus:outline-none"
+            className="w-full rounded-lg border border-[#2d3447] bg-[#0c0d12] px-3 py-2.5 text-base sm:text-xs text-white focus:border-[#00f090] focus:outline-none"
             required
           />
         </div>
@@ -446,7 +477,7 @@ export function CreateMarketModal({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             maxLength={300}
-            className="w-full rounded-lg border border-[#2d3447] bg-[#0c0d12] px-3 py-2 text-xs text-white focus:border-[#00f090] focus:outline-none"
+            className="w-full rounded-lg border border-[#2d3447] bg-[#0c0d12] px-3 py-2.5 text-base sm:text-xs text-white focus:border-[#00f090] focus:outline-none"
             placeholder="Condiciones específicas para certificar el ganador..."
           />
         </div>
@@ -457,14 +488,17 @@ export function CreateMarketModal({
           </div>
         ) : null}
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#00f090] py-3 text-sm font-bold text-black transition hover:bg-[#00d681] disabled:opacity-50"
-        >
-          {loading ? <Spinner className="h-4 w-4 text-black" /> : null}
-          {loading ? 'Publicando…' : 'Publicar evento'}
-        </button>
+        {/* Botón de Publicación Sticky al pie del modal */}
+        <div className="sticky -bottom-5 sm:-bottom-6 -mx-5 sm:-mx-6 px-5 sm:px-6 py-3.5 bg-[#0c0d12]/95 backdrop-blur-md border-t border-[#1e2330] mt-5 z-10">
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#00f090] py-3 text-sm font-bold text-slate-950 transition hover:bg-[#00d681] active:scale-[0.98] disabled:opacity-50 shadow-lg shadow-[#00f090]/15"
+          >
+            {loading ? <Spinner className="h-4 w-4 text-black" /> : null}
+            {loading ? 'Publicando…' : 'Publicar evento'}
+          </button>
+        </div>
       </form>
     </Modal>
   );

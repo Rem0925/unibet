@@ -17,6 +17,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { signInWithGoogle, signInWithMagicLink } from '@/lib/auth';
+import { supabase } from '@/lib/supabase';
 import { errorMessage } from '@/lib/api-client';
 import { Spinner } from './ui';
 

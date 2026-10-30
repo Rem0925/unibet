@@ -31,11 +31,15 @@ import { BetSlip } from '@/components/BetSlip';
 import { CreateMarketModal } from '@/components/CreateMarketModal';
 import { DepositModal } from '@/components/DepositModal';
 import { GroupsModal } from '@/components/GroupsModal';
+import { GroupsView } from '@/components/GroupsView';
 import { CancelMarketModal, ResolveMarketModal } from '@/components/MarketActions';
 import { MarketCard } from '@/components/MarketCard';
 import { ModerationPanel } from '@/components/ModerationPanel';
-import { Header, MobileNav } from '@/components/Navigation';
+import { MyBets } from '@/components/MyBets';
+import { Header, MenuDrawer, MobileNav } from '@/components/Navigation';
+import { ProfileView } from '@/components/ProfileView';
 import { EmptyState, ErrorBanner, Spinner } from '@/components/ui';
+import { WalletView } from '@/components/WalletView';
 import { WithdrawModal } from '@/components/WithdrawModal';
 import { useNow } from '@/hooks/useNow';
 import { apiFetch, errorMessage } from '@/lib/api-client';
@@ -98,6 +102,8 @@ export function Terminal({
   const [categoryFilter, setCategoryFilter] = useState<string>('TODOS');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('PLAYING');
   const [visibilityFilter, setVisibilityFilter] = useState<'ALL' | 'PUBLIC' | 'GROUP' | 'PRIVATE_CODE'>('ALL');
+  const [targetGroupId, setTargetGroupId] = useState<string | null>(null);
+  const [targetGroupName, setTargetGroupName] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>('POOL');
 
   const [betSlip, setBetSlip] = useState<BetSlipState | null>(null);
@@ -108,6 +114,7 @@ export function Terminal({
   const [showGroups, setShowGroups] = useState(false);
   const [resolveMarket, setResolveMarket] = useState<MarketSummary | null>(null);
   const [cancelMarket, setCancelMarket] = useState<MarketSummary | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const role = profile.role;
   const now = useNow();
@@ -263,6 +270,7 @@ export function Terminal({
 
   const handleNavigate = (tab: AppTab, subTab?: AccountSubTab) => {
     setActiveTab(tab);
+    setDrawerOpen(false);
     if (subTab) {
       setAccountSubTab(subTab);
     }
@@ -397,6 +405,9 @@ export function Terminal({
 
     const visibilityMatch = (market: MarketSummary) => {
       if (visibilityFilter === 'ALL') return true;
+      if (visibilityFilter === 'GROUP' && targetGroupId) {
+        return market.visibility === 'GROUP' && market.groupId === targetGroupId;
+      }
       return market.visibility === visibilityFilter;
     };
 
@@ -433,7 +444,7 @@ export function Terminal({
 
   return (
     <div className="flex min-h-screen flex-col bg-[#07080c] font-sans text-slate-100">
-      {/* Barra de Navegación Superior (Sin pestaña 'Mi Cuenta', con avatar dropdown y saldo) */}
+      {/* Barra de Navegación Superior */}
       <Header
         profile={profile}
         activeTab={effectiveTab}
@@ -441,8 +452,9 @@ export function Terminal({
         onDeposit={() => setShowDeposit(true)}
         onWithdraw={() => setShowWithdraw(true)}
         onCreate={() => setShowCreate(true)}
-        onOpenGroups={() => setShowGroups(true)}
+        onOpenGroups={() => handleNavigate('GROUPS')}
         onLogout={onLogout}
+        onOpenDrawer={() => setDrawerOpen(true)}
       />
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 pb-24 pt-6 md:pb-12">
@@ -517,22 +529,22 @@ export function Terminal({
                 </div>
               </div>
 
-              {/* Sección de Círculos Privados */}
-              <div className="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-3.5 shadow-sm space-y-2">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-sky-400">
-                  <Users className="h-4 w-4" />
-                  <span>Círculos Privados</span>
+              {/* Sección de Comunidad */}
+              <div className="rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-3.5 shadow-sm space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-200">
+                  <Users className="h-4 w-4 text-[#00f090]" />
+                  <span>Comunidad</span>
                 </div>
                 <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Apuesta solo con tus amigos en grupos cerrados o con código secreto.
+                  Apuesta en privado con tus amigos en grupos cerrados o con código secreto.
                 </p>
                 <button
                   type="button"
-                  onClick={() => setShowGroups(true)}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-sky-500/40 bg-sky-500/15 py-2 text-xs font-bold text-sky-300 hover:bg-sky-500/25 transition"
+                  onClick={() => handleNavigate('GROUPS')}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-[#1e2330] bg-[#141822] py-2 text-xs font-semibold text-slate-200 hover:border-[#00f090]/40 hover:text-white transition cursor-pointer"
                 >
                   <Users className="h-3.5 w-3.5" />
-                  <span>Gestionar Mis Grupos</span>
+                  <span>Ver Comunidad</span>
                 </button>
               </div>
 
@@ -629,7 +641,7 @@ export function Terminal({
                   {activeBetsList.length > 0 && (
                     <button
                       type="button"
-                      onClick={() => handleNavigate('ACCOUNT', 'BETS')}
+                      onClick={() => handleNavigate('BETS')}
                       className="mt-2 w-full text-center text-[11px] font-bold text-[#00f090] hover:underline"
                     >
                       Ver mis apuestas en curso →
@@ -718,7 +730,7 @@ export function Terminal({
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Buscar eventos, opciones o creador..."
-                        className="w-full rounded-xl border border-[#212633] bg-[#141822] py-2.5 pl-10 pr-8 text-xs font-medium text-white placeholder-slate-500 focus:border-[#00f090] focus:outline-none transition"
+                        className="w-full rounded-xl border border-[#212633] bg-[#141822] py-2.5 pl-10 pr-8 text-base sm:text-xs font-medium text-white placeholder-slate-500 focus:border-[#00f090] focus:outline-none transition"
                       />
                       {search && (
                         <button
@@ -736,7 +748,7 @@ export function Terminal({
                       <select
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value as SortOption)}
-                        className="w-full sm:w-auto rounded-xl border border-[#212633] bg-[#141822] px-3 py-2.5 text-xs font-semibold text-slate-200 focus:border-[#00f090] focus:outline-none cursor-pointer"
+                        className="w-full sm:w-auto rounded-xl border border-[#212633] bg-[#141822] px-3 py-2.5 text-base sm:text-xs font-semibold text-slate-200 focus:border-[#00f090] focus:outline-none cursor-pointer"
                       >
                         <option value="POOL">Mayor Pozo</option>
                         <option value="CLOSING_SOON">Cierre Próximo</option>
@@ -746,16 +758,16 @@ export function Terminal({
                   </div>
 
                   {/* Filtros de Estado y de Audiencia */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-[#1e2330]/50">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {/* Estado */}
-                      <div className="flex flex-wrap gap-1 rounded-xl border border-[#212633] bg-[#141822] p-1">
+                  <div className="flex flex-col gap-2 pt-1 border-t border-[#1e2330]/50">
+                    {/* Fila 1: Segmentado de Estado (Scroll horizontal en móviles para evitar saltos de línea) */}
+                    <div className="flex items-center gap-1 overflow-x-auto scrollbar-none flex-nowrap pb-0.5">
+                      <div className="flex gap-1 rounded-xl border border-[#212633] bg-[#141822] p-1 shrink-0">
                         {statusFilters.map((f) => (
                           <button
                             key={f.id}
                             type="button"
                             onClick={() => setStatusFilter(f.id)}
-                            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                            className={`rounded-lg px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition active:scale-95 ${
                               statusFilter === f.id
                                 ? 'bg-[#00f090] text-slate-950 shadow-sm'
                                 : 'text-slate-400 hover:text-white'
@@ -765,13 +777,15 @@ export function Terminal({
                           </button>
                         ))}
                       </div>
+                    </div>
 
-                      {/* Visibilidad / Audiencia */}
-                      <div className="flex flex-wrap gap-1 rounded-xl border border-[#212633] bg-[#141822] p-1">
+                    {/* Fila 2: Audiencia y botón Mis Grupos alineados */}
+                    <div className="flex items-center justify-between gap-2 overflow-x-auto scrollbar-none flex-nowrap pb-0.5">
+                      <div className="flex gap-1 rounded-xl border border-[#212633] bg-[#141822] p-1 shrink-0">
                         <button
                           type="button"
                           onClick={() => setVisibilityFilter('ALL')}
-                          className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                          className={`rounded-lg px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition active:scale-95 ${
                             visibilityFilter === 'ALL'
                               ? 'bg-[#181c26] text-white ring-1 ring-slate-600'
                               : 'text-slate-400 hover:text-white'
@@ -782,7 +796,7 @@ export function Terminal({
                         <button
                           type="button"
                           onClick={() => setVisibilityFilter('PUBLIC')}
-                          className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                          className={`rounded-lg px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition active:scale-95 ${
                             visibilityFilter === 'PUBLIC'
                               ? 'bg-[#00f090] text-slate-950 shadow-sm'
                               : 'text-slate-400 hover:text-white'
@@ -793,7 +807,7 @@ export function Terminal({
                         <button
                           type="button"
                           onClick={() => setVisibilityFilter('GROUP')}
-                          className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                          className={`rounded-lg px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition active:scale-95 ${
                             visibilityFilter === 'GROUP'
                               ? 'bg-sky-400 text-slate-950 shadow-sm'
                               : 'text-slate-400 hover:text-white'
@@ -804,7 +818,7 @@ export function Terminal({
                         <button
                           type="button"
                           onClick={() => setVisibilityFilter('PRIVATE_CODE')}
-                          className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                          className={`rounded-lg px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition active:scale-95 ${
                             visibilityFilter === 'PRIVATE_CODE'
                               ? 'bg-purple-400 text-slate-950 shadow-sm'
                               : 'text-slate-400 hover:text-white'
@@ -813,51 +827,62 @@ export function Terminal({
                           Privadas
                         </button>
                       </div>
-                    </div>
 
-                    <button
-                      type="button"
-                      onClick={() => setShowGroups(true)}
-                      className="flex items-center gap-1.5 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-xs font-bold text-sky-400 hover:bg-sky-500/20 transition"
-                    >
-                      <Users className="h-3.5 w-3.5" />
-                      <span>Mis Grupos</span>
-                    </button>
+                      {targetGroupId && (
+                        <div className="flex items-center gap-1.5 shrink-0 rounded-xl border border-sky-500/40 bg-sky-500/20 px-2.5 py-1 text-xs font-bold text-sky-200">
+                          <Users className="h-3 w-3 text-sky-400" />
+                          <span>Grupo: {targetGroupName}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTargetGroupId(null);
+                              setTargetGroupName(null);
+                            }}
+                            className="ml-1 rounded p-0.5 text-sky-300 hover:bg-sky-500/30 hover:text-white cursor-pointer"
+                            title="Quitar filtro de grupo"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                {/* Categorías en Carrusel Horizontal (Visible en tablets y móviles) */}
-                <div className="flex xl:hidden items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                  <button
-                    type="button"
-                    onClick={() => setCategoryFilter('TODOS')}
-                    className={`shrink-0 rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
-                      categoryFilter === 'TODOS'
-                        ? 'border-[#00f090] bg-[#00f090]/15 text-[#00f090]'
-                        : 'border-[#212633] bg-[#141822] text-slate-300 hover:border-slate-500'
-                    }`}
-                  >
-                    Todas ({playingCount})
-                  </button>
+                {/* Categorías en Carrusel Horizontal: Solo si existen categorías activas */}
+                {activeCategories.length > 0 && (
+                  <div className="flex xl:hidden items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                    <button
+                      type="button"
+                      onClick={() => setCategoryFilter('TODOS')}
+                      className={`shrink-0 rounded-xl border px-3 py-1.5 text-xs font-semibold transition active:scale-95 ${
+                        categoryFilter === 'TODOS'
+                          ? 'border-[#00f090] bg-[#00f090]/15 text-[#00f090]'
+                          : 'border-[#212633] bg-[#141822] text-slate-300 hover:border-slate-500'
+                      }`}
+                    >
+                      Todas ({playingCount})
+                    </button>
 
-                  {activeCategories.map((cat) => {
-                    const isSelected = categoryFilter.toUpperCase() === cat;
-                    return (
-                      <button
-                        key={cat}
-                        type="button"
-                        onClick={() => setCategoryFilter(cat)}
-                        className={`shrink-0 rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
-                          isSelected
-                            ? 'border-[#00f090] bg-[#00f090]/15 text-[#00f090]'
-                            : 'border-[#212633] bg-[#141822] text-slate-300 hover:border-slate-500'
-                        }`}
-                      >
-                        {cat} ({categoryStats[cat]})
-                      </button>
-                    );
-                  })}
-                </div>
+                    {activeCategories.map((cat) => {
+                      const isSelected = categoryFilter.toUpperCase() === cat;
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setCategoryFilter(cat)}
+                          className={`shrink-0 rounded-xl border px-3 py-1.5 text-xs font-semibold transition active:scale-95 ${
+                            isSelected
+                              ? 'border-[#00f090] bg-[#00f090]/15 text-[#00f090]'
+                              : 'border-[#212633] bg-[#141822] text-slate-300 hover:border-slate-500'
+                          }`}
+                        >
+                          {cat} ({categoryStats[cat]})
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {marketsError ? (
@@ -876,21 +901,55 @@ export function Terminal({
                 </div>
               ) : filteredMarkets.length === 0 ? (
                 <EmptyState
-                  icon={<Trophy className="h-8 w-8 text-slate-600" />}
-                  title={markets.length === 0 ? 'No hay eventos disponibles' : 'Sin resultados'}
+                  icon={
+                    visibilityFilter === 'GROUP' ? (
+                      <Users className="h-8 w-8 text-sky-400" />
+                    ) : visibilityFilter === 'PRIVATE_CODE' ? (
+                      <Lock className="h-8 w-8 text-purple-400" />
+                    ) : (
+                      <Trophy className="h-8 w-8 text-[#00f090]" />
+                    )
+                  }
+                  title={
+                    search
+                      ? 'Sin resultados para la búsqueda'
+                      : visibilityFilter === 'GROUP'
+                        ? 'No hay apuestas de grupos visibles'
+                        : visibilityFilter === 'PRIVATE_CODE'
+                          ? 'No hay apuestas privadas por código'
+                          : statusFilter === 'RESOLVED'
+                            ? 'No hay eventos finalizados'
+                            : 'No hay eventos disponibles'
+                  }
                   description={
-                    markets.length === 0
-                      ? 'Sé el primero en crear una predicción entre amigos.'
-                      : 'Prueba con otra palabra clave o selecciona otra categoría.'
+                    search
+                      ? `No encontramos coincidencias para "${search}". Prueba con otros términos.`
+                      : visibilityFilter === 'GROUP'
+                        ? 'Crea tu propio grupo exclusivo o únete con un código de invitación para apostar con tus amigos.'
+                        : visibilityFilter === 'PRIVATE_CODE'
+                          ? 'Ingresa con el enlace de invitación o crea tu propia apuesta secreta protegida por código.'
+                          : statusFilter === 'RESOLVED'
+                            ? 'Los eventos concluidos y sus resultados liquidados aparecerán aquí.'
+                            : 'Sé el primero en crear una predicción entre amigos.'
                   }
                   action={
-                    <button
-                      type="button"
-                      onClick={() => setShowCreate(true)}
-                      className="flex items-center gap-2 rounded-xl bg-[#00f090] px-4 py-2 text-xs font-bold text-slate-950 transition hover:bg-[#00d681]"
-                    >
-                      <Plus className="h-4 w-4" /> Crear evento
-                    </button>
+                    visibilityFilter === 'GROUP' ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowGroups(true)}
+                        className="flex items-center gap-2 rounded-xl bg-sky-400 px-4 py-2.5 text-xs font-bold text-slate-950 transition hover:bg-sky-300 active:scale-95 shadow-md shadow-sky-500/10"
+                      >
+                        <Users className="h-4 w-4" /> Gestionar Mis Grupos
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowCreate(true)}
+                        className="flex items-center gap-2 rounded-xl bg-[#00f090] px-4 py-2.5 text-xs font-bold text-slate-950 transition hover:bg-[#00d681] active:scale-95 shadow-md shadow-[#00f090]/15"
+                      >
+                        <Plus className="h-4 w-4" /> Crear evento
+                      </button>
+                    )
                   }
                 />
               ) : (
@@ -922,6 +981,7 @@ export function Terminal({
                   inline={true}
                   onClose={() => setBetSlip(null)}
                   onConfirm={(amount, code) => void handlePlaceBet(amount, code)}
+                  onDeposit={() => setShowDeposit(true)}
                 />
               ) : (
                 <div className="rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-5 shadow-sm text-center">
@@ -965,7 +1025,7 @@ export function Terminal({
                     {activeBetsList.length > 3 && (
                       <button
                         type="button"
-                        onClick={() => handleNavigate('ACCOUNT', 'BETS')}
+                        onClick={() => handleNavigate('BETS')}
                         className="block w-full text-center text-[11px] font-bold text-[#00f090] hover:underline pt-1"
                       >
                         Ver las {activeBetsList.length} apuestas →
@@ -979,20 +1039,69 @@ export function Terminal({
         ) : null}
 
         {/* ======================================================== */}
-        {/* PESTAÑA: Mi Cuenta (Unificada)                          */}
+        {/* PESTAÑA DEDICADA: Mis Apuestas                          */}
         {/* ======================================================== */}
-        {effectiveTab === 'ACCOUNT' ? (
-          <AccountView
-            profile={profile}
+        {effectiveTab === 'BETS' ? (
+          <MyBets
             bets={bets}
+            loading={betsLoading}
+            error={null}
+            onRetry={() => void loadBets()}
+            onExplore={() => handleNavigate('EXPLORE')}
+            onSelectMarket={(marketId) => {
+              handleNavigate('EXPLORE');
+              setTimeout(() => {
+                const el = document.getElementById('market-' + marketId);
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }, 150);
+            }}
+          />
+        ) : null}
+
+        {/* ======================================================== */}
+        {/* PESTAÑA DEDICADA: Mi Billetera & Movimientos             */}
+        {/* ======================================================== */}
+        {effectiveTab === 'WALLET' ? (
+          <WalletView
+            profile={profile}
             transactions={transactions}
-            loadingBets={betsLoading}
-            loadingWallet={walletLoading}
-            initialSubTab={accountSubTab}
-            onSubTabChange={setAccountSubTab}
-            onRefreshProfile={refreshProfile}
+            loading={walletLoading}
+            error={null}
+            onRetry={() => void loadTransactions()}
             onDeposit={() => setShowDeposit(true)}
             onWithdraw={() => setShowWithdraw(true)}
+            onRefreshProfile={refreshProfile}
+            onExplore={() => handleNavigate('EXPLORE')}
+          />
+        ) : null}
+
+        {/* ======================================================== */}
+        {/* PESTAÑA DEDICADA: Círculos y Grupos Privados             */}
+        {/* ======================================================== */}
+        {effectiveTab === 'GROUPS' ? (
+          <GroupsView
+            showToast={showToast}
+            onExplore={() => handleNavigate('EXPLORE')}
+            onFilterGroup={(groupId, groupName) => {
+              setVisibilityFilter('GROUP');
+              setTargetGroupId(groupId);
+              setTargetGroupName(groupName);
+              handleNavigate('EXPLORE');
+            }}
+            onCreateInGroup={(groupId) => {
+              setTargetGroupId(groupId);
+              setShowCreate(true);
+            }}
+          />
+        ) : null}
+
+        {/* ======================================================== */}
+        {/* PESTAÑA DEDICADA: Mi Perfil & Ajustes                    */}
+        {/* ======================================================== */}
+        {effectiveTab === 'PROFILE' || effectiveTab === 'ACCOUNT' ? (
+          <ProfileView
+            profile={profile}
+            onRefreshProfile={refreshProfile}
             onLogout={onLogout}
             showToast={showToast}
             onExplore={() => handleNavigate('EXPLORE')}
@@ -1035,12 +1144,35 @@ export function Terminal({
 
       {/* Navegación móvil inferior */}
       <MobileNav
+        profile={profile}
         activeTab={effectiveTab}
-        accountSubTab={accountSubTab}
         onNavigate={handleNavigate}
         onCreate={() => setShowCreate(true)}
-        role={role}
-        username={profile.username}
+        onOpenMenu={() => setDrawerOpen(true)}
+      />
+
+      {/* Menú Hamburguesa Drawer */}
+      <MenuDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        profile={profile}
+        activeTab={effectiveTab}
+        onNavigate={(tab) => {
+          setDrawerOpen(false);
+          handleNavigate(tab);
+        }}
+        onDeposit={() => {
+          setDrawerOpen(false);
+          setShowDeposit(true);
+        }}
+        onOpenGroups={() => {
+          setDrawerOpen(false);
+          setShowGroups(true);
+        }}
+        onLogout={() => {
+          setDrawerOpen(false);
+          onLogout();
+        }}
       />
 
       {/* Floating BetSlip para móviles cuando se selecciona una opción */}
@@ -1056,6 +1188,7 @@ export function Terminal({
             inline={false}
             onClose={() => setBetSlip(null)}
             onConfirm={(amount, code) => void handlePlaceBet(amount, code)}
+            onDeposit={() => setShowDeposit(true)}
           />
         </div>
       ) : null}
@@ -1066,17 +1199,35 @@ export function Terminal({
           onClose={() => setShowGroups(false)}
           showToast={showToast}
           onGroupsChanged={() => void loadMarkets(true)}
+          onFilterGroup={(groupId, groupName) => {
+            setVisibilityFilter('GROUP');
+            setTargetGroupId(groupId);
+            setTargetGroupName(groupName);
+            handleNavigate('EXPLORE');
+          }}
+          onCreateInGroup={(groupId) => {
+            setTargetGroupId(groupId);
+            setShowCreate(true);
+          }}
         />
       ) : null}
 
       {showCreate ? (
         <CreateMarketModal
           availableCategories={activeCategories}
-          onClose={() => setShowCreate(false)}
+          onClose={() => {
+            setShowCreate(false);
+            setTargetGroupId(null);
+          }}
           onCreated={async () => {
             await Promise.allSettled([loadMarkets(true), refreshProfile()]);
           }}
           showToast={showToast}
+          onOpenGroups={() => {
+            setShowCreate(false);
+            setShowGroups(true);
+          }}
+          initialGroupId={targetGroupId ?? undefined}
         />
       ) : null}
 

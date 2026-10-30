@@ -1,4 +1,12 @@
-export type AppTab = 'EXPLORE' | 'ACCOUNT' | 'MODERATION' | 'ADMIN';
+export type AppTab =
+  | 'EXPLORE'
+  | 'BETS'
+  | 'WALLET'
+  | 'GROUPS'
+  | 'PROFILE'
+  | 'ACCOUNT'
+  | 'MODERATION'
+  | 'ADMIN';
 
 export type Role = 'ADMIN' | 'MODERATOR' | 'USER';
 
@@ -53,6 +61,7 @@ export interface GroupSummary {
   creatorUsername?: string;
   inviteCode: string;
   memberCount: number;
+  pendingCount?: number;
   userRole?: 'CREATOR' | 'ADMIN' | 'MEMBER';
   userStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
   createdAt: string;

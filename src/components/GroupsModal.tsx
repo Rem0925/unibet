@@ -8,6 +8,7 @@ import {
   ExternalLink,
   Plus,
   ShieldCheck,
+  TrendingUp,
   UserCheck,
   UserPlus,
   Users,
@@ -22,12 +23,21 @@ interface GroupsModalProps {
   onClose: () => void;
   showToast: (message: string, type?: 'success' | 'warn' | 'error') => void;
   onGroupsChanged?: () => void;
+  onFilterGroup?: (groupId: string, groupName: string) => void;
+  onCreateInGroup?: (groupId: string) => void;
 }
 
-export function GroupsModal({ onClose, showToast, onGroupsChanged }: GroupsModalProps) {
+export function GroupsModal({
+  onClose,
+  showToast,
+  onGroupsChanged,
+  onFilterGroup,
+  onCreateInGroup,
+}: GroupsModalProps) {
   const [activeTab, setActiveTab] = useState<'LIST' | 'CREATE' | 'JOIN'>('LIST');
   const [groups, setGroups] = useState<GroupSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Form states
   const [newGroupName, setNewGroupName] = useState('');
@@ -175,9 +185,13 @@ export function GroupsModal({ onClose, showToast, onGroupsChanged }: GroupsModal
     }
   };
 
-  const copyToClipboard = async (text: string, label: string) => {
+  const copyToClipboard = async (text: string, label: string, groupId?: string) => {
     try {
       await navigator.clipboard.writeText(text);
+      if (groupId) {
+        setCopiedId(groupId);
+        setTimeout(() => setCopiedId(null), 1800);
+      }
       showToast(`${label} copiado al portapapeles`, 'success');
     } catch {
       showToast(`No se pudo copiar ${label}`, 'warn');
@@ -320,25 +334,55 @@ export function GroupsModal({ onClose, showToast, onGroupsChanged }: GroupsModal
                         <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                           <button
                             type="button"
-                            onClick={() => copyToClipboard(grp.inviteCode, 'Código del grupo')}
-                            className="flex items-center gap-1 rounded-xl border border-[#212633] bg-[#141822] px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:text-white transition"
+                            onClick={() => {
+                              onFilterGroup?.(grp.id, grp.name);
+                              onClose();
+                            }}
+                            className="flex items-center gap-1 rounded-xl border border-sky-500/30 bg-sky-500/10 px-2.5 py-1.5 text-xs font-semibold text-sky-300 hover:bg-sky-500/20 active:scale-95 transition cursor-pointer"
+                            title="Ver eventos de este grupo"
                           >
-                            <Copy className="h-3 w-3 text-[#00f090]" />
-                            <span className="sm:inline">Copiar Código</span>
+                            <TrendingUp className="h-3 w-3 text-sky-400" />
+                            <span>Ver eventos</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onCreateInGroup?.(grp.id);
+                              onClose();
+                            }}
+                            className="flex items-center gap-1 rounded-xl border border-[#00f090]/30 bg-[#00f090]/10 px-2.5 py-1.5 text-xs font-semibold text-[#00f090] hover:bg-[#00f090]/20 active:scale-95 transition cursor-pointer"
+                            title="Crear apuesta para este grupo"
+                          >
+                            <Plus className="h-3 w-3" />
+                            <span>+ Apostar</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(grp.inviteCode, 'Código del grupo', grp.id)}
+                            className="flex items-center gap-1 rounded-xl border border-[#212633] bg-[#141822] px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:text-white active:scale-95 transition"
+                          >
+                            {copiedId === grp.id ? (
+                              <Check className="h-3 w-3 text-emerald-400" />
+                            ) : (
+                              <Copy className="h-3 w-3 text-[#00f090]" />
+                            )}
+                            <span className="sm:inline">{copiedId === grp.id ? '¡Copiado!' : 'Copiar'}</span>
                           </button>
 
                           {isCreator ? (
                             <button
                               type="button"
                               onClick={() => toggleManageMembers(grp.id)}
-                              className={`flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${
+                              className={`flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-semibold active:scale-95 transition ${
                                 isManaging
                                   ? 'border-[#00f090]/40 bg-[#00f090]/15 text-[#00f090]'
                                   : 'border-[#2d3447] bg-[#161a24] text-slate-200 hover:bg-[#1e2330]'
                               }`}
                             >
                               <ShieldCheck className="h-3.5 w-3.5 text-amber-400" />
-                              <span>{isManaging ? 'Ocultar Miembros' : 'Gestionar Miembros'}</span>
+                              <span>{isManaging ? 'Ocultar Miembros' : 'Miembros'}</span>
                             </button>
                           ) : null}
                         </div>
@@ -381,7 +425,7 @@ export function GroupsModal({ onClose, showToast, onGroupsChanged }: GroupsModal
                                             onClick={() =>
                                               handleMemberAction(grp.id, pendingMem.userId, 'APPROVE')
                                             }
-                                            className="flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[11px] font-bold text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-50"
+                                            className="flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-bold text-emerald-400 hover:bg-emerald-500/25 active:scale-95 disabled:opacity-50"
                                           >
                                             <Check className="h-3 w-3" /> Aceptar
                                           </button>
@@ -391,7 +435,7 @@ export function GroupsModal({ onClose, showToast, onGroupsChanged }: GroupsModal
                                             onClick={() =>
                                               handleMemberAction(grp.id, pendingMem.userId, 'REJECT')
                                             }
-                                            className="flex items-center gap-1 rounded-lg border border-rose-500/40 bg-rose-500/15 px-2 py-0.5 text-[11px] font-bold text-rose-400 hover:bg-rose-500/25 disabled:opacity-50"
+                                            className="flex items-center gap-1 rounded-lg border border-rose-500/40 bg-rose-500/15 px-2.5 py-1 text-[11px] font-bold text-rose-400 hover:bg-rose-500/25 active:scale-95 disabled:opacity-50"
                                           >
                                             <X className="h-3 w-3" /> Rechazar
                                           </button>
@@ -431,7 +475,7 @@ export function GroupsModal({ onClose, showToast, onGroupsChanged }: GroupsModal
                                           onClick={() =>
                                             handleMemberAction(grp.id, approvedMem.userId, 'REMOVE')
                                           }
-                                          className="text-[11px] text-rose-400 hover:text-rose-300 font-semibold flex items-center gap-0.5"
+                                          className="text-[11px] text-rose-400 hover:text-rose-300 font-semibold flex items-center gap-0.5 active:scale-95"
                                         >
                                           <UserX className="h-3 w-3" /> Expulsar
                                         </button>
@@ -466,7 +510,7 @@ export function GroupsModal({ onClose, showToast, onGroupsChanged }: GroupsModal
                 value={newGroupName}
                 onChange={(e) => setNewGroupName(e.target.value)}
                 placeholder="Ej: Amigos de la Champions, Crypto Traders..."
-                className="w-full rounded-xl border border-[#212633] bg-[#090a0f] px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:border-[#00f090] focus:outline-none"
+                className="w-full rounded-xl border border-[#212633] bg-[#090a0f] px-3.5 py-2.5 text-base sm:text-xs text-white placeholder-slate-500 focus:border-[#00f090] focus:outline-none transition-colors"
               />
             </div>
 
@@ -481,7 +525,7 @@ export function GroupsModal({ onClose, showToast, onGroupsChanged }: GroupsModal
                 value={newGroupDesc}
                 onChange={(e) => setNewGroupDesc(e.target.value)}
                 placeholder="Ej: Solo apuestas y predicciones privadas de la liga entre amigos..."
-                className="w-full rounded-xl border border-[#212633] bg-[#090a0f] px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:border-[#00f090] focus:outline-none"
+                className="w-full rounded-xl border border-[#212633] bg-[#090a0f] px-3.5 py-2 text-base sm:text-xs text-white placeholder-slate-500 focus:border-[#00f090] focus:outline-none transition-colors"
               />
             </div>
 
@@ -494,9 +538,9 @@ export function GroupsModal({ onClose, showToast, onGroupsChanged }: GroupsModal
             <button
               type="submit"
               disabled={creating || !newGroupName.trim()}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#00f090] py-3 text-xs font-bold text-slate-950 transition hover:bg-[#00d681] disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#00f090] py-3 text-xs font-bold text-slate-950 transition hover:bg-[#00d681] active:scale-[0.98] disabled:opacity-50 shadow-md shadow-[#00f090]/15"
             >
-              {creating ? <Spinner className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {creating ? <Spinner className="h-4 w-4 text-black" /> : <Plus className="h-4 w-4 text-black" />}
               {creating ? 'Creando grupo...' : 'Crear Grupo'}
             </button>
           </form>
@@ -517,7 +561,7 @@ export function GroupsModal({ onClose, showToast, onGroupsChanged }: GroupsModal
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                 placeholder="Ej: GRP-78X29A"
-                className="w-full rounded-xl border border-[#212633] bg-[#090a0f] px-3.5 py-2.5 font-mono text-sm font-bold text-white uppercase placeholder-slate-500 focus:border-[#00f090] focus:outline-none"
+                className="w-full rounded-xl border border-[#212633] bg-[#090a0f] px-3.5 py-2.5 font-mono text-base sm:text-sm font-bold text-white uppercase placeholder-slate-500 focus:border-[#00f090] focus:outline-none transition-colors"
               />
             </div>
 
@@ -530,9 +574,9 @@ export function GroupsModal({ onClose, showToast, onGroupsChanged }: GroupsModal
             <button
               type="submit"
               disabled={joining || !joinCode.trim()}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#00f090] py-3 text-xs font-bold text-slate-950 transition hover:bg-[#00d681] disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#00f090] py-3 text-xs font-bold text-slate-950 transition hover:bg-[#00d681] active:scale-[0.98] disabled:opacity-50 shadow-md shadow-[#00f090]/15"
             >
-              {joining ? <Spinner className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+              {joining ? <Spinner className="h-4 w-4 text-black" /> : <UserPlus className="h-4 w-4 text-black" />}
               {joining ? 'Enviando solicitud...' : 'Solicitar Unirme al Grupo'}
             </button>
           </form>

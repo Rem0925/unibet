@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Clock, Trophy, TrendingUp, Wallet, XCircle } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Clock, Trophy, TrendingUp, Wallet, XCircle } from 'lucide-react';
 import { useNow } from '@/hooks/useNow';
 import { formatShortDate, formatUsdt } from '@/lib/format';
 import type { BetRecord, BetStatus } from '@/lib/types';
@@ -42,12 +42,14 @@ export function MyBets({
   error,
   onRetry,
   onExplore,
+  onSelectMarket,
 }: {
   bets: BetRecord[];
   loading: boolean;
   error: string | null;
   onRetry: () => void;
   onExplore: () => void;
+  onSelectMarket?: (marketId: string) => void;
 }) {
   const [filter, setFilter] = useState<Filter>('ALL');
   const now = useNow();
@@ -74,8 +76,23 @@ export function MyBets({
   }, [bets]);
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <div className="mx-auto max-w-4xl space-y-5">
+      {/* Cabecera con botón Volver a Mercados */}
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={onExplore}
+          className="flex items-center gap-2 rounded-xl border border-[#1e2330] bg-[#141822] px-3.5 py-2 text-xs font-semibold text-slate-300 transition hover:border-[#00f090] hover:text-white active:scale-95 cursor-pointer"
+        >
+          <ArrowLeft className="h-4 w-4 text-[#00f090]" />
+          <span>Volver a Mercados</span>
+        </button>
+        <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+          Mis Apuestas & Historial
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         <SummaryCard
           icon={<Wallet className="h-3.5 w-3.5" />}
           label="Total apostado"
@@ -150,47 +167,60 @@ export function MyBets({
           }
         />
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {visibleBets.map((bet) => {
             const potential =
               bet.status === 'WON' ? numeric(bet.payoutAmount) : numeric(bet.amount);
             return (
               <article
                 key={bet.id}
-                className="rounded-lg border border-[#1e2330] bg-[#11141c] p-3 transition hover:border-[#2d3447]"
+                onClick={() => onSelectMarket?.(bet.marketId)}
+                className="group rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-4 transition hover:border-[#00f090]/40 hover:bg-[#11151f] shadow-sm cursor-pointer active:scale-[0.99]"
+                title="Ver este evento en el mercado"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <h3 className="truncate text-sm font-bold text-white">{bet.marketTitle}</h3>
-                    <div className="mt-1 flex flex-wrap items-center gap-2 font-mono text-[10px] text-slate-400">
-                      <span className="rounded border border-[#2a3142] bg-[#171b26] px-1.5 py-0.5 font-bold text-slate-200">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`shrink-0 rounded-md border px-2 py-0.5 font-mono text-[9px] font-bold ${statusStyle[bet.status]}`}
+                      >
+                        {statusLabel[bet.status]}
+                      </span>
+                      <span className="text-xs text-slate-500 font-medium">
+                        {formatShortDate(bet.createdAt)}
+                      </span>
+                    </div>
+                    <h3 className="mt-1 truncate text-sm font-bold text-white group-hover:text-emerald-300 transition">
+                      {bet.marketTitle}
+                    </h3>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                      <span>Selección:</span>
+                      <span className="rounded-lg border border-[#2a3142] bg-[#171b26] px-2 py-0.5 font-bold text-emerald-400">
                         {bet.selectedOption}
                       </span>
-                      <span>{formatShortDate(bet.createdAt)}</span>
                       {bet.marketStatus === 'RESOLVED' && bet.winningOption ? (
-                        <span className="text-slate-500">
-                          Ganó: <strong className="text-slate-300">{bet.winningOption}</strong>
+                        <span className="text-slate-500 text-[11px]">
+                          Ganador: <strong className="text-slate-300">{bet.winningOption}</strong>
                         </span>
                       ) : null}
                     </div>
                   </div>
-                  <span
-                    className={`shrink-0 rounded border px-1.5 py-0.5 font-mono text-[9px] font-bold ${statusStyle[bet.status]}`}
-                  >
-                    {statusLabel[bet.status]}
-                  </span>
+
+                  <div className="hidden sm:flex items-center text-slate-500 group-hover:text-[#00f090] transition shrink-0 pt-1">
+                    <ArrowUpRight className="h-4 w-4" />
+                  </div>
                 </div>
 
-                <div className="mt-3 flex items-end justify-between border-t border-[#1a1e28] pt-2 font-mono text-[10px]">
+                <div className="mt-3 flex items-end justify-between border-t border-[#1a1e28] pt-2.5 font-mono text-xs">
                   <div>
-                    <div className="text-slate-500">Apostado</div>
+                    <div className="text-[10px] uppercase text-slate-500">Monto apostado</div>
                     <div className="text-sm font-bold tabular-nums text-white">
-                      ${formatUsdt(bet.amount)}
+                      ${formatUsdt(bet.amount)} USDT
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-slate-500">
-                      {bet.status === 'WON' ? 'Pago recibido' : bet.status === 'ACTIVE' ? 'En juego' : 'Resultado'}
+                    <div className="text-[10px] uppercase text-slate-500">
+                      {bet.status === 'WON' ? 'Cobrado' : bet.status === 'ACTIVE' ? 'Potencial' : 'Resultado'}
                     </div>
                     <div
                       className={`text-sm font-bold tabular-nums ${
@@ -203,7 +233,7 @@ export function MyBets({
                     >
                       {bet.status === 'LOST'
                         ? '-$0.00'
-                        : `$${formatUsdt(potential)}`}
+                        : `$${formatUsdt(potential)} USDT`}
                     </div>
                   </div>
                 </div>

@@ -43,9 +43,9 @@ export function Modal({
       aria-label={title}
     >
       <div
-        className={`my-0 sm:my-6 w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} rounded-t-3xl sm:rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-5 sm:p-6 shadow-2xl shadow-black max-h-[92vh] overflow-y-auto pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:pb-6`}
+        className={`my-0 sm:my-6 w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} rounded-t-3xl sm:rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-5 sm:p-6 shadow-2xl shadow-black max-h-[92vh] overflow-y-auto pb-[calc(2rem+env(safe-area-inset-bottom))] sm:pb-6`}
       >
-        <div className="mb-5 flex items-start justify-between gap-4 border-b border-[#1e2330] pb-4">
+        <div className="mb-5 flex items-start justify-between gap-4 border-b border-[#1e2330] pb-4 sticky top-0 bg-[#0c0d12]/95 backdrop-blur-md z-10 -mx-5 -mt-5 px-5 pt-5 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-base font-bold text-white">
               {icon}
@@ -56,7 +56,7 @@ export function Modal({
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 rounded-xl p-1.5 text-slate-400 transition hover:bg-[#1e2330] hover:text-white focus:outline-none focus-visible:ring-1 focus-visible:ring-[#00f090]"
+            className="shrink-0 rounded-xl p-2 text-slate-400 transition hover:bg-[#1e2330] hover:text-white active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00f090]/40"
             aria-label="Cerrar"
           >
             <X className="h-5 w-5" />

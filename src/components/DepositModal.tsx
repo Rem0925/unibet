@@ -362,9 +362,9 @@ export function DepositModal({
                 step="0.01"
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
-                className="w-full rounded-xl border border-[#222736] bg-[#090a0f] px-3.5 py-2.5 font-mono text-sm text-white focus:border-[#00f090] focus:outline-none"
+                className="w-full rounded-xl border border-[#222736] bg-[#090a0f] px-3.5 py-2.5 font-mono text-base sm:text-sm text-white tabular-nums focus:border-[#00f090] focus:outline-none transition-colors"
               />
-              <span className="absolute right-3.5 top-2.5 text-xs font-bold text-slate-500">USDT</span>
+              <span className="absolute right-3.5 top-3 sm:top-2.5 text-xs font-bold text-slate-500">USDT</span>
             </div>
           </div>
 
@@ -374,7 +374,7 @@ export function DepositModal({
                 key={preset}
                 type="button"
                 onClick={() => setAmount(preset.toFixed(2))}
-                className={`rounded-lg border px-3 py-1 text-xs font-medium transition ${
+                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition active:scale-95 ${
                   Number.parseFloat(amount) === preset
                     ? 'border-[#00f090] bg-[#00f090]/15 text-[#00f090]'
                     : 'border-[#222736] bg-[#141822] text-slate-400 hover:border-slate-600 hover:text-white'
@@ -393,7 +393,7 @@ export function DepositModal({
                   Vinculada a tu perfil
                 </span>
               </div>
-              <div className="mt-1.5 font-mono text-sm font-bold text-white tracking-wide">
+              <div className="mt-1.5 font-mono text-sm font-bold text-white tracking-wide tabular-nums">
                 UID: {profile.binanceUid}
               </div>
             </div>
@@ -420,7 +420,7 @@ export function DepositModal({
                 value={uid}
                 onChange={(event) => setUid(event.target.value.replace(/\D/g, '').slice(0, 10))}
                 placeholder="Ej: 123456789"
-                className="w-full rounded-xl border border-[#222736] bg-[#090a0f] px-3.5 py-2.5 font-mono text-sm text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none"
+                className="w-full rounded-xl border border-[#222736] bg-[#090a0f] px-3.5 py-2.5 font-mono text-base sm:text-sm text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none transition-colors"
               />
               <p className="mt-1 text-[11px] text-slate-500">
                 Permite conciliar tu pago al instante cuando transfieras desde tu app.
@@ -431,15 +431,15 @@ export function DepositModal({
           <div className="space-y-2 rounded-xl border border-[#1e2330] bg-[#141822]/60 p-3.5 text-xs">
             <div className="flex justify-between text-slate-400">
               <span>Monto a transferir:</span>
-              <span className="font-mono text-white">${formatUsdt(gross)} USDT</span>
+              <span className="font-mono text-white tabular-nums">${formatUsdt(gross)} USDT</span>
             </div>
             <div className="flex justify-between text-slate-400">
               <span>Comisión de recarga (1.5%):</span>
-              <span className="font-mono text-amber-400">-${formatUsdt(fee)} USDT</span>
+              <span className="font-mono text-amber-400 tabular-nums">-${formatUsdt(fee)} USDT</span>
             </div>
             <div className="flex justify-between border-t border-[#1e2330] pt-2 font-bold text-white">
               <span>Saldo que recibirás:</span>
-              <span className="font-mono text-[#00f090]">${formatUsdt(net)} USDT</span>
+              <span className="font-mono text-[#00f090] tabular-nums">${formatUsdt(net)} USDT</span>
             </div>
           </div>
 
@@ -452,7 +452,7 @@ export function DepositModal({
           <button
             type="submit"
             disabled={loading}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#00f090] py-3 text-sm font-bold text-slate-950 transition hover:bg-[#00d681] disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#00f090] py-3 text-sm font-bold text-slate-950 transition hover:bg-[#00d681] active:scale-[0.98] disabled:opacity-60 shadow-lg shadow-[#00f090]/15"
           >
             {loading ? <Spinner className="text-black" /> : <ArrowRight className="h-4 w-4 text-black" />}
             {loading ? 'Generando orden…' : 'Continuar al pago'}

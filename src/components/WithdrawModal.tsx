@@ -366,7 +366,7 @@ export function WithdrawModal({
                 value={uid}
                 onChange={(event) => setUid(event.target.value.replace(/\D/g, '').slice(0, 10))}
                 placeholder="Ej: 123456789"
-                className="w-full rounded-xl border border-[#222736] bg-[#090a0f] px-3.5 py-2.5 font-mono text-sm text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none"
+                className="w-full rounded-xl border border-[#222736] bg-[#090a0f] px-3.5 py-2.5 font-mono text-base sm:text-sm text-white placeholder-slate-600 focus:border-[#00f090] focus:outline-none transition-colors"
               />
               <p className="mt-1 text-[11px] text-slate-500">
                 Encuéntralo en tu app de Binance: Perfil → ID de usuario.
@@ -405,7 +405,7 @@ export function WithdrawModal({
               value={bep20Address}
               onChange={(event) => setBep20Address(event.target.value.trim())}
               placeholder="0x..."
-              className={`w-full rounded-xl border bg-[#090a0f] px-3.5 py-2.5 font-mono text-sm text-white placeholder-slate-600 focus:outline-none ${
+              className={`w-full rounded-xl border bg-[#090a0f] px-3.5 py-2.5 font-mono text-base sm:text-sm text-white placeholder-slate-600 focus:outline-none transition-colors ${
                 isTronAddress
                   ? 'border-rose-500 focus:border-rose-400'
                   : isValidBsc
@@ -500,9 +500,9 @@ export function WithdrawModal({
               step="0.01"
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
-              className="w-full rounded-xl border border-[#222736] bg-[#090a0f] px-3.5 py-2.5 pr-14 font-mono text-sm text-white focus:border-[#00f090] focus:outline-none"
+              className="w-full rounded-xl border border-[#222736] bg-[#090a0f] px-3.5 py-2.5 pr-14 font-mono text-base sm:text-sm text-white tabular-nums focus:border-[#00f090] focus:outline-none transition-colors"
             />
-            <span className="absolute right-3.5 top-2.5 text-xs font-bold text-slate-500">USDT</span>
+            <span className="absolute right-3.5 top-3 sm:top-2.5 text-xs font-bold text-slate-500">USDT</span>
           </div>
         </div>
 
@@ -510,19 +510,19 @@ export function WithdrawModal({
         <div className="space-y-2 rounded-xl border border-[#1e2330] bg-[#141822]/60 p-3.5 text-xs">
           <div className="flex justify-between text-slate-400">
             <span>Monto debitado de tu saldo:</span>
-            <span className="font-mono text-white">${formatUsdt(amountNumber)} USDT</span>
+            <span className="font-mono text-white tabular-nums">${formatUsdt(amountNumber)} USDT</span>
           </div>
           <div className="flex justify-between text-slate-400">
             <span>
               {method === 'BEP20' ? 'Comisión de red Binance BSC (en vivo):' : 'Comisión de servicio (0%):'}
             </span>
-            <span className={`font-mono ${method === 'BEP20' ? 'text-amber-400' : 'text-[#00f090]'}`}>
+            <span className={`font-mono tabular-nums ${method === 'BEP20' ? 'text-amber-400' : 'text-[#00f090]'}`}>
               {method === 'BEP20' ? `-${liveFee.toFixed(2)} USDT` : '$0.00 USDT'}
             </span>
           </div>
           <div className="flex justify-between border-t border-[#1e2330] pt-2 font-bold text-white">
             <span>Recibirás en tu {method === 'BEP20' ? 'billetera Web3' : 'Binance Pay'}:</span>
-            <span className="font-mono text-sm text-[#00f090]">${formatUsdt(netPayout)} USDT</span>
+            <span className="font-mono text-sm text-[#00f090] tabular-nums">${formatUsdt(netPayout)} USDT</span>
           </div>
         </div>
 
@@ -547,7 +547,7 @@ export function WithdrawModal({
         <button
           type="submit"
           disabled={loading || balance <= 0 || (method === 'BEP20' && netPayout <= 0)}
-          className={`flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-slate-950 transition disabled:cursor-not-allowed disabled:opacity-50 ${
+          className={`flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-slate-950 transition active:scale-[0.98] shadow-lg shadow-black/40 disabled:cursor-not-allowed disabled:opacity-50 ${
             method === 'BEP20'
               ? 'bg-amber-400 hover:bg-amber-300'
               : 'bg-[#00f090] hover:bg-[#00d681]'
