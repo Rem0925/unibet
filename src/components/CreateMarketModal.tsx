@@ -184,80 +184,58 @@ export function CreateMarketModal({
     <Modal title="Crear nuevo evento" onClose={onClose} wide={true}>
       <form onSubmit={submit} className="space-y-4">
         {/* Selector de Audiencia / Visibilidad */}
-        <div>
-          <label className="mb-1.5 block text-xs font-bold text-slate-300">
+        <div className="space-y-1.5">
+          <label className="block text-xs font-bold text-slate-300">
             ¿Quién puede ver y apostar en este evento?
           </label>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-1 rounded-xl border border-[#1e2330] bg-[#11141c] p-1 text-xs font-semibold">
             {/* Opción 1: Pública */}
             <button
               type="button"
               onClick={() => setVisibility('PUBLIC')}
-              className={`flex flex-col items-start gap-1 p-2.5 sm:p-3 rounded-xl border text-left transition active:scale-[0.98] ${
+              className={`flex items-center justify-center gap-1.5 py-2 px-1 rounded-lg transition active:scale-95 cursor-pointer ${
                 visibility === 'PUBLIC'
-                  ? 'border-[#00f090] bg-[#00f090]/10 ring-1 ring-[#00f090]/30'
-                  : 'border-[#212633] bg-[#141822] hover:border-slate-500'
+                  ? 'bg-[#00f090] text-slate-950 font-bold shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-[#161a24]'
               }`}
             >
-              <div className="flex items-center gap-1.5 font-bold text-xs text-white">
-                <Globe
-                  className={`h-4 w-4 ${
-                    visibility === 'PUBLIC' ? 'text-[#00f090]' : 'text-slate-400'
-                  }`}
-                />
-                <span>Pública</span>
-              </div>
-              <span className="text-[11px] text-slate-400 leading-tight">
-                Todos en la plataforma
-              </span>
+              <Globe className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">Pública</span>
             </button>
 
             {/* Opción 2: Grupo Privado */}
             <button
               type="button"
               onClick={() => setVisibility('GROUP')}
-              className={`flex flex-col items-start gap-1 p-2.5 sm:p-3 rounded-xl border text-left transition active:scale-[0.98] ${
+              className={`flex items-center justify-center gap-1.5 py-2 px-1 rounded-lg transition active:scale-95 cursor-pointer ${
                 visibility === 'GROUP'
-                  ? 'border-sky-400 bg-sky-500/10 ring-1 ring-sky-400/30'
-                  : 'border-[#212633] bg-[#141822] hover:border-slate-500'
+                  ? 'bg-sky-400 text-slate-950 font-bold shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-[#161a24]'
               }`}
             >
-              <div className="flex items-center gap-1.5 font-bold text-xs text-white">
-                <Users
-                  className={`h-4 w-4 ${
-                    visibility === 'GROUP' ? 'text-sky-400' : 'text-slate-400'
-                  }`}
-                />
-                <span>Grupo Privado</span>
-              </div>
-              <span className="text-[11px] text-slate-400 leading-tight">
-                Solo miembros de tu grupo
-              </span>
+              <Users className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">Grupo</span>
             </button>
 
             {/* Opción 3: Privada por Código */}
             <button
               type="button"
               onClick={() => setVisibility('PRIVATE_CODE')}
-              className={`flex flex-col items-start gap-1 p-2.5 sm:p-3 rounded-xl border text-left transition active:scale-[0.98] ${
+              className={`flex items-center justify-center gap-1.5 py-2 px-1 rounded-lg transition active:scale-95 cursor-pointer ${
                 visibility === 'PRIVATE_CODE'
-                  ? 'border-purple-400 bg-purple-500/10 ring-1 ring-purple-400/30'
-                  : 'border-[#212633] bg-[#141822] hover:border-slate-500'
+                  ? 'bg-purple-400 text-slate-950 font-bold shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-[#161a24]'
               }`}
             >
-              <div className="flex items-center gap-1.5 font-bold text-xs text-white">
-                <Lock
-                  className={`h-4 w-4 ${
-                    visibility === 'PRIVATE_CODE' ? 'text-purple-400' : 'text-slate-400'
-                  }`}
-                />
-                <span>Por Código / Link</span>
-              </div>
-              <span className="text-[11px] text-slate-400 leading-tight">
-                Solo quienes tengan tu código
-              </span>
+              <Lock className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">Con Código</span>
             </button>
           </div>
+          <p className="text-[11px] text-slate-400">
+            {visibility === 'PUBLIC' && 'Visible para todos los apostadores en el feed.'}
+            {visibility === 'GROUP' && 'Visible únicamente para los miembros del grupo seleccionado.'}
+            {visibility === 'PRIVATE_CODE' && 'Solo accesible mediante código secreto o link directo.'}
+          </p>
 
           {/* Subpanel de Grupo */}
           {visibility === 'GROUP' ? (
