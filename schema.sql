@@ -600,6 +600,249 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.fn_undo_bet(UUID, UUID);
+
+CREATE OR REPLACE FUNCTION public.fn_undo_bet(
+    p_bet_id UUID,
+    p_user_id UUID
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_bet RECORD;
+    v_market RECORD;
+    v_new_balance NUMERIC(18, 4);
+    v_seconds_elapsed NUMERIC;
+BEGIN
+    SELECT * INTO v_bet
+    FROM public.bets
+    WHERE id = p_bet_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Apuesta no encontrada';
+    END IF;
+
+    IF v_bet.user_id <> p_user_id THEN
+        RAISE EXCEPTION 'No tienes permiso para deshacer esta apuesta';
+    END IF;
+
+    IF v_bet.status <> 'ACTIVE' THEN
+        RAISE EXCEPTION 'Esta apuesta ya no se encuentra activa';
+    END IF;
+
+    -- Validar ventana de gracia estricta de 10 segundos
+    v_seconds_elapsed := EXTRACT(EPOCH FROM (timezone('utc'::text, now()) - v_bet.created_at));
+    IF v_seconds_elapsed > 10.0 THEN
+        RAISE EXCEPTION 'El tiempo para deshacer la apuesta (10 segundos) ha expirado';
+    END IF;
+
+    SELECT * INTO v_market
+    FROM public.markets
+    WHERE id = v_bet.market_id
+    FOR UPDATE;
+
+    IF NOT FOUND OR v_market.status <> 'OPEN' THEN
+        RAISE EXCEPTION 'El mercado ya no está abierto para modificaciones';
+    END IF;
+
+    IF v_market.close_time <= timezone('utc'::text, now()) THEN
+        RAISE EXCEPTION 'El mercado ya cerró sus apuestas';
+    END IF;
+
+    -- Marcar la apuesta como reembolsada
+    UPDATE public.bets
+    SET status = 'REFUNDED',
+        payout_amount = v_bet.amount
+    WHERE id = v_bet.id;
+
+    -- Restar el monto completo del pozo del mercado
+    UPDATE public.markets
+    SET total_pool = GREATEST(0, total_pool - v_bet.amount)
+    WHERE id = v_market.id;
+
+    -- Reembolsar el 100% íntegro al saldo del usuario
+    UPDATE public.users
+    SET balance = balance + v_bet.amount,
+        updated_at = timezone('utc'::text, now())
+    WHERE id = p_user_id;
+
+    -- Registrar la transacción de reembolso
+    INSERT INTO public.transactions (user_id, type, amount, status, metadata)
+    VALUES (
+        p_user_id,
+        'REFUND',
+        v_bet.amount,
+        'COMPLETED',
+        jsonb_build_object(
+            'reason', 'undo_grace_period',
+            'market_id', v_market.id,
+            'bet_id', v_bet.id,
+            'seconds_elapsed', ROUND(v_seconds_elapsed, 2)
+        )
+    );
+
+    SELECT balance INTO v_new_balance FROM public.users WHERE id = p_user_id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'bet_id', v_bet.id,
+        'refunded_amount', v_bet.amount,
+        'new_balance', v_new_balance
+    );
+END;
+$$;
+
+DROP FUNCTION IF EXISTS public.fn_cashout_bet(UUID, UUID, NUMERIC);
+
+CREATE OR REPLACE FUNCTION public.fn_cashout_bet(
+    p_bet_id UUID,
+    p_user_id UUID,
+    p_expected_payout NUMERIC DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_bet RECORD;
+    v_market RECORD;
+    v_option_pool NUMERIC(18, 4);
+    v_tot_pool NUMERIC(18, 4);
+    v_ratio NUMERIC(18, 4);
+    v_recovery_rate NUMERIC(18, 4);
+    v_cashout_amount NUMERIC(18, 4);
+    v_penalty_amount NUMERIC(18, 4);
+    v_hard_cap NUMERIC(18, 4);
+    v_new_balance NUMERIC(18, 4);
+BEGIN
+    SELECT * INTO v_bet
+    FROM public.bets
+    WHERE id = p_bet_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Apuesta no encontrada';
+    END IF;
+
+    IF v_bet.user_id <> p_user_id THEN
+        RAISE EXCEPTION 'No tienes permiso para solicitar retiro de esta apuesta';
+    END IF;
+
+    IF v_bet.status <> 'ACTIVE' THEN
+        RAISE EXCEPTION 'Esta apuesta ya no se encuentra activa';
+    END IF;
+
+    SELECT * INTO v_market
+    FROM public.markets
+    WHERE id = v_bet.market_id
+    FOR UPDATE;
+
+    IF NOT FOUND OR v_market.status <> 'OPEN' THEN
+        RAISE EXCEPTION 'El retiro anticipado solo está disponible mientras el mercado esté abierto';
+    END IF;
+
+    IF v_market.close_time <= timezone('utc'::text, now()) THEN
+        RAISE EXCEPTION 'El mercado ya cerró sus apuestas, esperando resultado final';
+    END IF;
+
+    -- Calcular la proporción de la opción en el pozo
+    SELECT COALESCE(SUM(amount), 0) INTO v_option_pool
+    FROM public.bets
+    WHERE market_id = v_bet.market_id
+      AND selected_option = v_bet.selected_option
+      AND status = 'ACTIVE';
+
+    v_tot_pool := GREATEST(v_market.total_pool, v_bet.amount);
+
+    IF v_tot_pool <= 0 THEN
+        v_ratio := 0.5;
+    ELSE
+        v_ratio := v_option_pool / v_tot_pool;
+        IF v_ratio > 1.0 THEN v_ratio := 1.0; END IF;
+        IF v_ratio < 0.05 THEN v_ratio := 0.05; END IF;
+    END IF;
+
+    -- Regla de usuario: NUNCA recupera el 100% ni genera ganancias.
+    -- Factor de rescate: entre 0.20 y 0.80 según ratio en el pozo
+    v_recovery_rate := 0.20 + (0.60 * v_ratio);
+
+    -- Payout calculado (con piso de 0.01 y techo absoluto de 80% del valor apostado)
+    v_cashout_amount := TRUNC(v_bet.amount * v_recovery_rate, 2);
+    v_hard_cap := TRUNC(v_bet.amount * 0.80, 2);
+
+    IF v_cashout_amount > v_hard_cap THEN
+        v_cashout_amount := v_hard_cap;
+    END IF;
+
+    -- Garantía matemática: siempre menor que el monto apostado
+    IF v_cashout_amount >= v_bet.amount THEN
+        v_cashout_amount := v_bet.amount - 0.01;
+    END IF;
+
+    IF v_cashout_amount < 0.01 THEN
+        v_cashout_amount := 0.01;
+    END IF;
+
+    v_penalty_amount := v_bet.amount - v_cashout_amount;
+
+    -- Tolerancia contra deslizamiento si se envió expected_payout
+    IF p_expected_payout IS NOT NULL AND abs(p_expected_payout - v_cashout_amount) > 0.50 THEN
+        RAISE EXCEPTION 'La cotización de retiro cambió. Valor actual: % USDT.', v_cashout_amount;
+    END IF;
+
+    -- Marcar la apuesta como reembolsada con el importe de salida
+    UPDATE public.bets
+    SET status = 'REFUNDED',
+        payout_amount = v_cashout_amount
+    WHERE id = v_bet.id;
+
+    -- Restar únicamente el monto pagado del total_pool
+    -- La penalización (v_penalty_amount) se queda en el pozo
+    UPDATE public.markets
+    SET total_pool = GREATEST(0, total_pool - v_cashout_amount)
+    WHERE id = v_market.id;
+
+    -- Acreditar monto de retiro anticipado al usuario
+    UPDATE public.users
+    SET balance = balance + v_cashout_amount,
+        updated_at = timezone('utc'::text, now())
+    WHERE id = p_user_id;
+
+    -- Registrar transacción con metadata explicativa
+    INSERT INTO public.transactions (user_id, type, amount, status, metadata)
+    VALUES (
+        p_user_id,
+        'REFUND',
+        v_cashout_amount,
+        'COMPLETED',
+        jsonb_build_object(
+            'reason', 'cashout',
+            'market_id', v_market.id,
+            'bet_id', v_bet.id,
+            'original_amount', v_bet.amount,
+            'cashout_amount', v_cashout_amount,
+            'penalty_loss', v_penalty_amount,
+            'recovery_rate', ROUND(v_recovery_rate, 4)
+        )
+    );
+
+    SELECT balance INTO v_new_balance FROM public.users WHERE id = p_user_id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'bet_id', v_bet.id,
+        'cashout_amount', v_cashout_amount,
+        'penalty_amount', v_penalty_amount,
+        'new_balance', v_new_balance
+    );
+END;
+$$;
+
 DROP FUNCTION IF EXISTS public.fn_resolve_market(UUID, TEXT, UUID);
 
 CREATE OR REPLACE FUNCTION public.fn_resolve_market(
@@ -1461,6 +1704,8 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO service_role;
 
 REVOKE ALL ON FUNCTION public.fn_credit_deposit(UUID, NUMERIC, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_place_bet(UUID, UUID, TEXT, NUMERIC) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.fn_undo_bet(UUID, UUID) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.fn_cashout_bet(UUID, UUID, NUMERIC) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_resolve_market(UUID, TEXT, UUID) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_house_admin_id() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_close_market(UUID, UUID) FROM PUBLIC;
@@ -1473,6 +1718,8 @@ REVOKE ALL ON FUNCTION public.fn_fail_deposit(TEXT, TEXT) FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION public.fn_credit_deposit(UUID, NUMERIC, TEXT) FROM anon, authenticated;
 REVOKE ALL ON FUNCTION public.fn_place_bet(UUID, UUID, TEXT, NUMERIC) FROM anon, authenticated;
+REVOKE ALL ON FUNCTION public.fn_undo_bet(UUID, UUID) FROM anon, authenticated;
+REVOKE ALL ON FUNCTION public.fn_cashout_bet(UUID, UUID, NUMERIC) FROM anon, authenticated;
 REVOKE ALL ON FUNCTION public.fn_resolve_market(UUID, TEXT, UUID) FROM anon, authenticated;
 REVOKE ALL ON FUNCTION public.fn_house_admin_id() FROM anon, authenticated;
 REVOKE ALL ON FUNCTION public.fn_close_market(UUID, UUID) FROM anon, authenticated;
@@ -1485,6 +1732,8 @@ REVOKE ALL ON FUNCTION public.fn_fail_deposit(TEXT, TEXT) FROM anon, authenticat
 
 GRANT EXECUTE ON FUNCTION public.fn_credit_deposit(UUID, NUMERIC, TEXT) TO service_role;
 GRANT EXECUTE ON FUNCTION public.fn_place_bet(UUID, UUID, TEXT, NUMERIC) TO service_role;
+GRANT EXECUTE ON FUNCTION public.fn_undo_bet(UUID, UUID) TO service_role;
+GRANT EXECUTE ON FUNCTION public.fn_cashout_bet(UUID, UUID, NUMERIC) TO service_role;
 GRANT EXECUTE ON FUNCTION public.fn_resolve_market(UUID, TEXT, UUID) TO service_role;
 GRANT EXECUTE ON FUNCTION public.fn_close_market(UUID, UUID) TO service_role;
 GRANT EXECUTE ON FUNCTION public.fn_cancel_market(UUID, UUID, TEXT) TO service_role;

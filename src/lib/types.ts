@@ -166,6 +166,8 @@ export interface PendingDeposit {
   username: string;
   amount: string;
   createdAt: string;
+  submittedTxId?: string | null;
+  userConfirmedPayment?: boolean;
 }
 
 export interface AuditLogRecord {

@@ -107,6 +107,19 @@ export const PlaceBetSchema = z
   })
   .strict();
 
+export const UndoBetSchema = z
+  .object({
+    betId: UuidSchema,
+  })
+  .strict();
+
+export const CashoutBetSchema = z
+  .object({
+    betId: UuidSchema,
+    expectedPayout: PositiveMoneySchema.optional(),
+  })
+  .strict();
+
 export const WithdrawSchema = z
   .object({
     amount: PositiveMoneySchema.min(WITHDRAW_MIN, {
@@ -172,7 +185,18 @@ export const VerifyDepositSchema = z
       .regex(/^[0-9]{8,10}$/, {
         message: 'El Binance UID debe contener entre 8 y 10 dígitos numéricos',
       })
-      .optional(),
+      .optional()
+      .or(z.literal('')),
+    binanceTxId: z
+      .string()
+      .trim()
+      .min(4, { message: 'El ID de transacción debe tener al menos 4 caracteres' })
+      .max(80, { message: 'ID de transacción demasiado largo' })
+      .regex(/^[A-Za-z0-9_.-]+$/, {
+        message: 'El ID de transacción solo puede contener letras, números, puntos, guiones y guiones bajos',
+      })
+      .optional()
+      .or(z.literal('')),
   })
   .strict();
 
@@ -238,12 +262,20 @@ export const ReconcileDepositSchema = z
       .max(64)
       .regex(/^[A-Za-z0-9_-]+$/, { message: 'Referencia inválida' }),
     action: z.enum(['verify', 'fail'], { message: 'Acción inválida' }),
+    binanceTxId: z
+      .string()
+      .trim()
+      .max(80)
+      .optional()
+      .or(z.literal('')),
     note: OptionalCleanText(300),
   })
   .strict();
 
 export type CreateMarketInput = z.infer<typeof CreateMarketSchema>;
 export type PlaceBetInput = z.infer<typeof PlaceBetSchema>;
+export type UndoBetInput = z.infer<typeof UndoBetSchema>;
+export type CashoutBetInput = z.infer<typeof CashoutBetSchema>;
 export type WithdrawInput = z.infer<typeof WithdrawSchema>;
 export type DepositInput = z.infer<typeof DepositSchema>;
 export type ResolveMarketInput = z.infer<typeof ResolveMarketSchema>;

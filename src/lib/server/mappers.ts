@@ -134,10 +134,12 @@ export interface PendingDepositRow {
   user_id: string;
   amount: string | number;
   reference_id: string | null;
+  metadata?: unknown;
   created_at: string;
 }
 
 export function mapPendingDeposit(row: PendingDepositRow, username: string): PendingDeposit {
+  const meta = row.metadata && typeof row.metadata === 'object' ? (row.metadata as Record<string, unknown>) : {};
   return {
     id: row.id,
     referenceId: row.reference_id ?? '',
@@ -145,6 +147,8 @@ export function mapPendingDeposit(row: PendingDepositRow, username: string): Pen
     username,
     amount: String(row.amount),
     createdAt: row.created_at,
+    submittedTxId: typeof meta.submitted_tx_id === 'string' ? meta.submitted_tx_id : null,
+    userConfirmedPayment: Boolean(meta.user_confirmed_payment),
   };
 }
 

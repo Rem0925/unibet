@@ -47,10 +47,12 @@ export interface BinancePayPayerInfo {
 export interface BinancePayTransactionItem {
   orderType: string;
   transactionId: string;
+  orderId?: string | number;
   transactionTime: number;
   amount: string;
   currency: string;
   walletType?: number;
+  counterpartyId?: number | string;
   payerInfo?: BinancePayPayerInfo;
   receiverInfo?: BinancePayPayerInfo;
 }
@@ -178,10 +180,9 @@ async function callBinanceSapi<T>(options: {
       ? `${config.baseUrl}${options.endpoint}?${signedQuery}`
       : `${config.baseUrl}${options.endpoint}`;
 
-  // Usar el proxy estático ÚNICAMENTE para la llamada de retiro on-chain hacia Binance.
-  // Las demás consultas (depósitos, tarifas en vivo) no consumen la cuota de Fixie.
-  const isWithdrawCall = options.endpoint.includes('/withdraw/apply');
-  const agent = isWithdrawCall ? getProxyAgent() : undefined;
+  // Si Fixie o un proxy estático está configurado, todas las llamadas autenticadas hacia Binance
+  // deben salir por Fixie para coincidir con la lista de IPs autorizadas en Binance (52.87.82.133, 52.5.155.132).
+  const agent = getProxyAgent();
   const fetchOptions: RequestInit & { dispatcher?: unknown } = {
     method: options.method,
     headers: {

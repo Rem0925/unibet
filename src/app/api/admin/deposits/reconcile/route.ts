@@ -24,8 +24,9 @@ export async function POST(request: NextRequest) {
     const { profile } = await requireRole(request, ['ADMIN']);
     enforceRateLimit(`admin-deposit-reconcile:${profile.id}`, 30, 60_000);
 
-    const { referenceId, action, note } = await parseBody(request, ReconcileDepositSchema);
+    const { referenceId, action, binanceTxId: paramTxId, note } = await parseBody(request, ReconcileDepositSchema);
     const supabase = getServiceSupabase();
+    const cleanAdminTxId = paramTxId?.trim() || null;
 
     const { data: txData, error: txError } = await supabase
       .from('transactions')
@@ -75,6 +76,8 @@ export async function POST(request: NextRequest) {
     const orderAmount = Number(tx.amount);
     let binanceTxId: string | null = null;
     let verifiedAmount = orderAmount;
+    let payerName: string | null = null;
+    let counterpartyId: string | number | null = null;
 
     if (isBinanceConfigured()) {
       try {
@@ -86,11 +89,25 @@ export async function POST(request: NextRequest) {
 
         const metadata = metadataRecord(tx.metadata);
         const userUid = typeof metadata.payer_binance_uid === 'string' ? metadata.payer_binance_uid : null;
+        const submittedTxId = cleanAdminTxId || (typeof metadata.submitted_tx_id === 'string' ? metadata.submitted_tx_id.trim() : null);
 
         const match = transactions.find((item) => {
-          if (item.orderType !== 'C2C' || item.currency !== 'USDT') return false;
+          if (item.currency !== 'USDT') return false;
           const txAmt = Number.parseFloat(item.amount);
           if (!Number.isFinite(txAmt) || Math.abs(txAmt - orderAmount) > 0.05) return false;
+
+          if (submittedTxId) {
+            const searchNorm = submittedTxId.toLowerCase().replace(/^p_/i, '');
+            const itemTxNorm = item.transactionId.toLowerCase().replace(/^p_/i, '');
+            const itemOrderId = item.orderId ? String(item.orderId).trim() : '';
+            return (
+              itemTxNorm === searchNorm ||
+              item.transactionId.toLowerCase() === submittedTxId.toLowerCase() ||
+              itemOrderId === submittedTxId
+            );
+          }
+
+          if (item.orderType !== 'C2C') return false;
           if (userUid && item.payerInfo?.binanceId && item.payerInfo.binanceId !== userUid) return false;
           return true;
         });
@@ -98,6 +115,8 @@ export async function POST(request: NextRequest) {
         if (match) {
           binanceTxId = match.transactionId;
           verifiedAmount = Number.parseFloat(match.amount);
+          payerName = match.payerInfo?.name ?? null;
+          counterpartyId = match.counterpartyId ?? null;
         }
       } catch (err) {
         console.warn('[admin] No se pudo verificar con Binance SAPI, continuando con conciliación manual:', err);
@@ -121,6 +140,8 @@ export async function POST(request: NextRequest) {
         metadata: {
           ...metadata,
           binance_pay_tx_id: binanceTxId,
+          payer_name: payerName,
+          payer_counterparty_id: counterpartyId,
           reconciled_by: profile.id,
           reconciled_at: new Date().toISOString(),
           reconciliation_note: note ?? null,

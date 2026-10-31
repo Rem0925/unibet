@@ -25,8 +25,9 @@ export async function POST(request: NextRequest) {
     const { profile } = await requireUser(request);
     enforceRateLimit(`deposit-verify:${profile.id}`, 20, 60_000);
 
-    const { tradeNo, binanceUid } = await parseBody(request, VerifyDepositSchema);
+    const { tradeNo, binanceUid, binanceTxId } = await parseBody(request, VerifyDepositSchema);
     const supabase = getServiceSupabase();
+    const cleanTxId = binanceTxId?.trim() || null;
 
     // Actualizar UID si fue provisto
     if (binanceUid && binanceUid !== profile.binanceUid) {
@@ -77,6 +78,7 @@ export async function POST(request: NextRequest) {
         metadata: {
           ...metadataRecord(tx.metadata),
           user_confirmed_payment: true,
+          submitted_tx_id: cleanTxId,
           user_checked_at: new Date().toISOString(),
         },
       })
@@ -93,32 +95,84 @@ export async function POST(request: NextRequest) {
 
     const orderAmount = Number(tx.amount);
     const orderCreatedAt = new Date(tx.created_at).getTime();
-    // Consultar transferencias C2C en Binance Pay desde 10 minutos antes de la orden
+
+    // Consultar transferencias C2C en Binance Pay
     const transactions = await fetchBinancePayTransactions({
-      startTime: Math.max(0, orderCreatedAt - 10 * 60 * 1000),
+      startTime: Math.max(0, orderCreatedAt - (cleanTxId ? 24 * 60 * 60 * 1000 : 15 * 60 * 1000)),
       limit: 100,
     });
 
-    // Buscar coincidencia C2C en USDT
-    const match = transactions.find((item) => {
-      if (item.orderType !== 'C2C' || item.currency !== 'USDT') return false;
-      const txAmount = Number.parseFloat(item.amount);
-      if (!Number.isFinite(txAmount) || Math.abs(txAmount - orderAmount) > 0.05) return false;
+    let match: (typeof transactions)[number] | undefined;
 
-      // Si tenemos el UID del usuario, validar que coincida
-      if (effectiveUid) {
-        return item.payerInfo?.binanceId === effectiveUid;
-      }
-      return true;
-    });
-
-    if (!match) {
-      return NextResponse.json({
-        success: false,
-        pending: true,
-        message:
-          'Aún no detectamos la transferencia en Binance Pay. Si acabas de transferir, espera unos 15 a 30 segundos y vuelve a comprobar.',
+    if (cleanTxId) {
+      // 1. Verificación directa por ID de transacción o ID de orden provisto por el usuario
+      const searchNormalized = cleanTxId.toLowerCase().replace(/^p_/i, '');
+      const candidate = transactions.find((item) => {
+        const itemTxIdNorm = item.transactionId.toLowerCase().replace(/^p_/i, '');
+        const itemOrderId = item.orderId ? String(item.orderId).trim() : '';
+        return (
+          itemTxIdNorm === searchNormalized ||
+          item.transactionId.toLowerCase() === cleanTxId.toLowerCase() ||
+          itemOrderId === cleanTxId
+        );
       });
+
+      if (!candidate) {
+        return NextResponse.json({
+          success: false,
+          pending: true,
+          message: `Aún no encontramos en Binance Pay la transacción "${cleanTxId}". Asegúrate de haber completado la transferencia o revisa si copiaste el ID correcto de tu comprobante.`,
+        });
+      }
+
+      if (candidate.currency !== 'USDT') {
+        throw new ApiError('La moneda de la transferencia debe ser USDT.', 400, 'INVALID_CURRENCY');
+      }
+
+      const txAmount = Number.parseFloat(candidate.amount);
+      if (!Number.isFinite(txAmount) || txAmount <= 0) {
+        throw new ApiError('La transacción no representa un pago entrante válido.', 400, 'INVALID_AMOUNT');
+      }
+
+      if (Math.abs(txAmount - orderAmount) > 0.05) {
+        throw new ApiError(
+          `El monto en Binance (${txAmount.toFixed(2)} USDT) no coincide con el monto de la orden (${orderAmount.toFixed(2)} USDT).`,
+          400,
+          'AMOUNT_MISMATCH'
+        );
+      }
+
+      if (effectiveUid && candidate.payerInfo?.binanceId && candidate.payerInfo.binanceId !== effectiveUid) {
+        throw new ApiError(
+          'La cuenta de Binance que realizó la transferencia no coincide con tu UID registrado.',
+          403,
+          'UID_MISMATCH'
+        );
+      }
+
+      match = candidate;
+    } else {
+      // 2. Coincidencia automática por monto y ventana de tiempo
+      match = transactions.find((item) => {
+        if (item.orderType !== 'C2C' || item.currency !== 'USDT') return false;
+        const txAmount = Number.parseFloat(item.amount);
+        if (!Number.isFinite(txAmount) || Math.abs(txAmount - orderAmount) > 0.05) return false;
+
+        // Si Binance devuelve explícitamente el binanceId del pagador (sin enmascarar), verificar que no sea diferente
+        if (effectiveUid && item.payerInfo?.binanceId && item.payerInfo.binanceId !== effectiveUid) {
+          return false;
+        }
+        return true;
+      });
+
+      if (!match) {
+        return NextResponse.json({
+          success: false,
+          pending: true,
+          message:
+            'Aún no detectamos la transferencia en Binance Pay. Pega el ID de transacción de tu comprobante de Binance para verificarla directamente.',
+        });
+      }
     }
 
     // Verificar que este transactionId no haya sido acreditado previamente en otra transacción
@@ -163,6 +217,8 @@ export async function POST(request: NextRequest) {
           ...metadata,
           binance_pay_tx_id: match.transactionId,
           payer_binance_id: match.payerInfo?.binanceId ?? effectiveUid,
+          payer_name: match.payerInfo?.name ?? null,
+          payer_counterparty_id: match.counterpartyId ?? null,
           verified_at: new Date().toISOString(),
         },
       })
@@ -175,7 +231,8 @@ export async function POST(request: NextRequest) {
         tradeNo,
         amount: depositAmount,
         binanceTxId: match.transactionId,
-        payerUid: match.payerInfo?.binanceId,
+        payerUid: match.payerInfo?.binanceId ?? effectiveUid,
+        payerName: match.payerInfo?.name,
       },
     });
 

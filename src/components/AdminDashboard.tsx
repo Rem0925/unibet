@@ -706,7 +706,7 @@ function DepositsTab({
   return (
     <div>
       <div className="mb-3 text-xs text-slate-400">
-        {overview.pendingDeposits.length} recargas recientes en verificación (últimos 30 min)
+        {overview.pendingDeposits.length} recarga(s) pendiente(s) en espera de verificación o conciliación
       </div>
       <div className="divide-y divide-[#1e2330]">
         {overview.pendingDeposits.map((deposit) => {
@@ -722,8 +722,13 @@ function DepositsTab({
                     <span className="ml-2 font-sans text-xs font-normal text-slate-400">
                       @{deposit.username}
                     </span>
+                    {deposit.userConfirmedPayment && (
+                      <span className="ml-2 text-[10px] font-bold text-[#00f090] bg-[#00f090]/10 border border-[#00f090]/25 px-2 py-0.5 rounded-full">
+                        Usuario reportó pago
+                      </span>
+                    )}
                   </div>
-                  <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                     <span>{formatDate(deposit.createdAt)}</span>
                     <span>·</span>
                     <span className="font-mono text-[11px] text-slate-400">Ref: {deposit.referenceId}</span>
@@ -734,6 +739,22 @@ function DepositsTab({
                     >
                       <Copy className="h-2.5 w-2.5" /> Copiar
                     </button>
+                    {deposit.submittedTxId && (
+                      <>
+                        <span>·</span>
+                        <span className="text-[11px] text-slate-400">ID Binance:</span>
+                        <span className="font-mono font-bold text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 text-[11px]">
+                          {deposit.submittedTxId}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(deposit.submittedTxId!, 'ID Binance')}
+                          className="text-amber-400 hover:text-amber-300 text-[10px] font-semibold flex items-center gap-0.5 bg-amber-500/10 px-1.5 py-0.5 rounded"
+                        >
+                          <Copy className="h-2.5 w-2.5" /> Copiar ID
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
 

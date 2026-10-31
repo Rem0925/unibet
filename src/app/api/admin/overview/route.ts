@@ -101,9 +101,8 @@ export async function GET(request: NextRequest) {
         .select('id, user_id, amount, reference_id, metadata, created_at')
         .eq('type', 'DEPOSIT')
         .eq('status', 'PENDING')
-        .gte('created_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
         .order('created_at', { ascending: false })
-        .limit(50),
+        .limit(100),
       supabase
         .from('audit_logs')
         .select('id, actor_id, action, target_user_id, metadata, created_at')
@@ -123,16 +122,10 @@ export async function GET(request: NextRequest) {
     }
 
     const users = ((userData ?? []) as ProfileRow[]).map(mapUserProfile);
-    const transactions = ((txData ?? []) as TransactionRow[])
-      .filter((row) => !(row.type === 'DEPOSIT' && row.status !== 'COMPLETED'))
-      .slice(0, 60);
+    const transactions = ((txData ?? []) as TransactionRow[]).slice(0, 100);
     const pendingRows = (pendingData ?? []) as PendingWithdrawalRow[];
-    // Filtrar para no mostrar intentos abandonados donde el usuario sólo abrió el QR y no transfirió
+    // Mostrar todas las órdenes de depósito pendientes para que el admin siempre tenga control
     const pendingDepositRows = ((pendingDepositData ?? []) as (PendingDepositRow & { metadata?: unknown })[])
-      .filter((row) => {
-        const meta = metadataRecord(row.metadata);
-        return Boolean(meta.user_confirmed_payment || meta.user_checked_at);
-      })
       .map((row) => row as PendingDepositRow);
     const auditRows = (auditData ?? []) as AuditLogRow[];
 

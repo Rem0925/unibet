@@ -34,6 +34,7 @@ export function DepositModal({
 }) {
   const [amount, setAmount] = useState('20.00');
   const [uid, setUid] = useState(profile.binanceUid ?? '');
+  const [binanceTxId, setBinanceTxId] = useState('');
   const [order, setOrder] = useState<DepositOrderResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -87,7 +88,11 @@ export function DepositModal({
           '/api/wallet/deposit/verify',
           {
             method: 'POST',
-            body: JSON.stringify({ tradeNo: order.tradeNo, binanceUid: uid.trim() || undefined }),
+            body: JSON.stringify({
+              tradeNo: order.tradeNo,
+              binanceUid: uid.trim() || undefined,
+              binanceTxId: binanceTxId.trim() || undefined,
+            }),
           }
         );
 
@@ -109,7 +114,7 @@ export function DepositModal({
       active = false;
       clearInterval(interval);
     };
-  }, [order, paid, uid, onRefreshProfile, showToast]);
+  }, [order, paid, uid, binanceTxId, onRefreshProfile, showToast]);
 
   const createOrder = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -152,7 +157,11 @@ export function DepositModal({
         '/api/wallet/deposit/verify',
         {
           method: 'POST',
-          body: JSON.stringify({ tradeNo: order.tradeNo, binanceUid: uid.trim() || undefined }),
+          body: JSON.stringify({
+            tradeNo: order.tradeNo,
+            binanceUid: uid.trim() || undefined,
+            binanceTxId: binanceTxId.trim() || undefined,
+          }),
         }
       );
 
@@ -324,6 +333,49 @@ export function DepositModal({
             </div>
           </div>
 
+          {/* Campo para ingresar el ID de transacción de Binance para verificación directa */}
+          <div className="rounded-xl border border-[#00f090]/30 bg-[#00f090]/5 p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label htmlFor="binance-tx-input" className="text-xs font-bold text-white flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4 text-[#00f090]" />
+                ¿Ya pagaste en Binance?
+              </label>
+              <span className="text-[10px] text-[#00f090] font-bold bg-[#00f090]/15 px-2 py-0.5 rounded border border-[#00f090]/30">
+                Acreditación directa
+              </span>
+            </div>
+
+            <div className="relative">
+              <input
+                id="binance-tx-input"
+                type="text"
+                value={binanceTxId}
+                onChange={(event) => {
+                  setBinanceTxId(event.target.value);
+                  if (error) setError(null);
+                }}
+                placeholder="Pega aquí el ID de transacción (ej: P_A25BTAB...)"
+                className="w-full rounded-lg border border-[#2a3142] bg-[#07090d] px-3.5 py-2.5 text-xs font-mono text-white placeholder-slate-500 focus:border-[#00f090] focus:outline-none transition-colors"
+              />
+              {binanceTxId ? (
+                <button
+                  type="button"
+                  onClick={() => setBinanceTxId('')}
+                  className="absolute right-2.5 top-2.5 text-slate-500 hover:text-slate-300 text-xs px-1 font-bold"
+                >
+                  ✕
+                </button>
+              ) : null}
+            </div>
+
+            <div className="flex items-start gap-1.5 text-[11px] text-slate-400">
+              <Info className="h-3.5 w-3.5 text-[#00f090] shrink-0 mt-0.5" />
+              <span>
+                Abre el comprobante en tu app de Binance y copia el <strong>ID de transacción</strong> (inicia con P_) o el <strong>ID de orden</strong>.
+              </span>
+            </div>
+          </div>
+
           {error ? (
             <div className="rounded-xl border border-[#f43f5e]/30 bg-[#f43f5e]/10 p-3 text-xs text-[#fda4af]">
               {error}
@@ -336,13 +388,15 @@ export function DepositModal({
               type="button"
               onClick={checkManually}
               disabled={checking}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#00f090] py-3 text-sm font-bold text-slate-950 transition hover:bg-[#00d681] disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#00f090] py-3 text-sm font-bold text-slate-950 transition hover:bg-[#00d681] disabled:opacity-60 shadow-lg shadow-[#00f090]/15"
             >
               {checking ? <Spinner className="text-black" /> : <RefreshCw className="h-4 w-4 text-black" />}
-              {checking ? 'Verificando con Binance…' : 'Ya transferí / Comprobar Acreditación'}
+              {checking ? 'Verificando con Binance…' : 'Ya transferí / Verificar y Acreditar Saldo'}
             </button>
             <p className="text-center text-[11px] text-slate-500">
-              El sistema comprueba automáticamente cada pocos segundos.
+              {binanceTxId.trim()
+                ? 'Se verificará inmediatamente con el ID de transacción ingresado y el monto exacto.'
+                : 'El sistema también comprueba automáticamente en segundo plano cada pocos segundos.'}
             </p>
           </div>
         </div>

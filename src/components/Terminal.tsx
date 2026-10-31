@@ -15,6 +15,7 @@ import {
   Lock,
   Plus,
   RefreshCw,
+  RotateCcw,
   Search,
   Sparkles,
   Ticket,
@@ -115,9 +116,21 @@ export function Terminal({
   const [resolveMarket, setResolveMarket] = useState<MarketSummary | null>(null);
   const [cancelMarket, setCancelMarket] = useState<MarketSummary | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [undoableBet, setUndoableBet] = useState<{
+    betId: string;
+    marketTitle: string;
+    option: string;
+    amount: number;
+    placedAt: number;
+  } | null>(null);
+  const [undoing, setUndoing] = useState(false);
 
   const role = profile.role;
   const now = useNow();
+
+  const undoSecondsLeft = undoableBet
+    ? Math.max(0, Math.ceil((10000 - (now - undoableBet.placedAt)) / 1000))
+    : 0;
 
   const showToast = useCallback((message: string, type: ToastType = 'success') => {
     const id = Date.now() + Math.floor(Math.random() * 1000);
@@ -280,11 +293,35 @@ export function Terminal({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const openBetSlip = (market: MarketSummary, option: string) => {
+    setBetSlip({ marketId: market.id, option });
+  };
+
+  const activeSlipMarket = useMemo(() => {
+    if (!betSlip) return null;
+    return markets.find((m) => m.id === betSlip.marketId) ?? null;
+  }, [markets, betSlip]);
+
+  const userActiveInMarket = useMemo(() => {
+    if (!betSlip) return 0;
+    return bets
+      .filter((b) => b.marketId === betSlip.marketId && b.status === 'ACTIVE')
+      .reduce((sum, b) => sum + (Number.parseFloat(b.amount) || 0), 0);
+  }, [bets, betSlip]);
+
+  const activeBetsList = useMemo(() => {
+    return bets.filter((b) => b.status === 'ACTIVE');
+  }, [bets]);
+
   const handlePlaceBet = async (amount: number, accessCode?: string) => {
     if (!betSlip) return;
     setPlacing(true);
     try {
-      const response = await apiFetch<{ success: boolean; message: string }>('/api/bets/place', {
+      const response = await apiFetch<{
+        success: boolean;
+        message: string;
+        betId?: string;
+      }>('/api/bets/place', {
         method: 'POST',
         body: JSON.stringify({
           marketId: betSlip.marketId,
@@ -293,6 +330,17 @@ export function Terminal({
           accessCode: accessCode?.trim() || undefined,
         }),
       });
+
+      if (response.betId) {
+        setUndoableBet({
+          betId: response.betId,
+          marketTitle: activeSlipMarket?.title || 'Mercado',
+          option: betSlip.option,
+          amount,
+          placedAt: now,
+        });
+      }
+
       showToast(response.message || 'Apuesta confirmada con éxito', 'success');
       setBetSlip(null);
       await Promise.allSettled([
@@ -305,6 +353,55 @@ export function Terminal({
       showToast(errorMessage(betError), 'error');
     } finally {
       setPlacing(false);
+    }
+  };
+
+  const handleUndoBet = async (betId: string) => {
+    setUndoing(true);
+    try {
+      const response = await apiFetch<{
+        success: boolean;
+        message: string;
+        refundedAmount?: string | number;
+      }>('/api/bets/undo', {
+        method: 'POST',
+        body: JSON.stringify({ betId }),
+      });
+      showToast(response.message || 'Apuesta deshecha con éxito. Saldo reintegrado.', 'success');
+      setUndoableBet(null);
+      await Promise.allSettled([
+        refreshProfile(),
+        loadMarkets(true),
+        loadBets(true),
+        loadTransactions(true),
+      ]);
+    } catch (undoErr) {
+      showToast(errorMessage(undoErr), 'error');
+    } finally {
+      setUndoing(false);
+    }
+  };
+
+  const handleCashoutBet = async (betId: string, expectedPayout: number) => {
+    try {
+      const response = await apiFetch<{
+        success: boolean;
+        message: string;
+        cashoutAmount?: string | number;
+      }>('/api/bets/cashout', {
+        method: 'POST',
+        body: JSON.stringify({ betId, expectedPayout }),
+      });
+      showToast(response.message || 'Retiro anticipado liquidado con éxito.', 'success');
+      await Promise.allSettled([
+        refreshProfile(),
+        loadMarkets(true),
+        loadBets(true),
+        loadTransactions(true),
+      ]);
+    } catch (cashoutErr) {
+      showToast(errorMessage(cashoutErr), 'error');
+      throw cashoutErr;
     }
   };
 
@@ -328,26 +425,6 @@ export function Terminal({
       ...(role === 'ADMIN' ? [loadAdmin(true)] : []),
     ]);
   };
-
-  const openBetSlip = (market: MarketSummary, option: string) => {
-    setBetSlip({ marketId: market.id, option });
-  };
-
-  const activeSlipMarket = useMemo(() => {
-    if (!betSlip) return null;
-    return markets.find((m) => m.id === betSlip.marketId) ?? null;
-  }, [markets, betSlip]);
-
-  const userActiveInMarket = useMemo(() => {
-    if (!betSlip) return 0;
-    return bets
-      .filter((b) => b.marketId === betSlip.marketId && b.status === 'ACTIVE')
-      .reduce((sum, b) => sum + (Number.parseFloat(b.amount) || 0), 0);
-  }, [bets, betSlip]);
-
-  const activeBetsList = useMemo(() => {
-    return bets.filter((b) => b.status === 'ACTIVE');
-  }, [bets]);
 
   // Dynamic active categories derived strictly from open/closed markets with counts
   const categoryStats = useMemo(() => {
@@ -1046,8 +1123,11 @@ export function Terminal({
             bets={bets}
             loading={betsLoading}
             error={null}
+            markets={markets}
             onRetry={() => void loadBets()}
             onExplore={() => handleNavigate('EXPLORE')}
+            onUndoBet={handleUndoBet}
+            onCashoutBet={handleCashoutBet}
             onSelectMarket={(marketId) => {
               handleNavigate('EXPLORE');
               setTimeout(() => {
@@ -1265,6 +1345,36 @@ export function Terminal({
           onDone={handleResolutionChanged}
           showToast={showToast}
         />
+      ) : null}
+
+      {/* Barra Flotante de Deshacer Apuesta (Ventana de gracia de 10s) */}
+      {undoableBet && undoSecondsLeft > 0 ? (
+        <div className="fixed bottom-24 left-4 right-4 z-50 mx-auto max-w-md sm:bottom-6 sm:left-6 sm:right-auto sm:w-96 animate-in slide-in-from-bottom-5 duration-300">
+          <div className="rounded-2xl border border-amber-500/50 bg-[#121620] p-3.5 shadow-2xl shadow-black flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+                <span className="h-2 w-2 rounded-full bg-[#00f090] animate-pulse" />
+                <span>Apuesta confirmada</span>
+              </div>
+              <p className="truncate text-xs text-slate-300 mt-0.5">
+                ${formatUsdt(undoableBet.amount)} USDT en {undoableBet.option}
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={undoing}
+              onClick={() => handleUndoBet(undoableBet.betId)}
+              className="shrink-0 flex items-center gap-1.5 rounded-xl border border-amber-500/60 bg-amber-500/20 px-3 py-1.5 text-xs font-bold text-amber-300 hover:bg-amber-500/30 active:scale-95 transition cursor-pointer"
+            >
+              {undoing ? (
+                <Spinner className="h-3.5 w-3.5 text-amber-300" />
+              ) : (
+                <RotateCcw className="h-3.5 w-3.5" />
+              )}
+              <span>Deshacer ({undoSecondsLeft}s)</span>
+            </button>
+          </div>
+        </div>
       ) : null}
 
       {/* Notificaciones flotantes (Toast) */}
