@@ -1093,7 +1093,10 @@ function TransactionsTab({
             </div>
             <div className="mt-0.5 truncate text-[11px] text-slate-500">
               {formatDate(tx.createdAt)} · {tx.status}
-              {tx.referenceId ? ` · ${tx.referenceId}` : ''}
+              {tx.referenceId ? ` · Ref: ${tx.referenceId}` : ''}
+              {tx.metadata?.binance_pay_tx_id
+                ? ` · Binance: ${String(tx.metadata.binance_pay_tx_id)}`
+                : ''}
             </div>
           </div>
           <div

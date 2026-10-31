@@ -313,7 +313,10 @@ export function WalletView({
                         </div>
                         <div className="truncate font-mono text-[9px] text-slate-500">
                           {formatDate(tx.createdAt)}
-                          {tx.referenceId ? ` · ${tx.referenceId}` : ''}
+                          {tx.referenceId ? ` · Ref: ${tx.referenceId}` : ''}
+                          {tx.metadata?.binance_pay_tx_id
+                            ? ` · Binance: ${String(tx.metadata.binance_pay_tx_id)}`
+                            : ''}
                         </div>
                       </div>
                     </div>
