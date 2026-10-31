@@ -11,6 +11,7 @@ import {
   Clock,
   Flame,
   Globe,
+  KeyRound,
   Layers,
   Lock,
   Plus,
@@ -26,6 +27,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
+import { AccessCodeModal } from '@/components/AccessCodeModal';
 import { AccountView, type AccountSubTab } from '@/components/AccountView';
 import { AdminDashboard } from '@/components/AdminDashboard';
 import { BetSlip } from '@/components/BetSlip';
@@ -113,6 +115,7 @@ export function Terminal({
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [showGroups, setShowGroups] = useState(false);
+  const [showCodeModal, setShowCodeModal] = useState(false);
   const [resolveMarket, setResolveMarket] = useState<MarketSummary | null>(null);
   const [cancelMarket, setCancelMarket] = useState<MarketSummary | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -144,22 +147,69 @@ export function Terminal({
     setToasts((current) => current.filter((toast) => toast.id !== id));
   };
 
-  const loadMarkets = useCallback(async (silent = false) => {
+  const loadMarkets = useCallback(async (silent = false, extraCode?: string): Promise<MarketSummary[] | null> => {
     if (!silent) setMarketsLoading(true);
     try {
-      const codeParam = typeof window !== 'undefined'
+      const urlCode = typeof window !== 'undefined'
         ? new URLSearchParams(window.location.search).get('code')
         : null;
-      const url = codeParam ? `/api/markets?code=${encodeURIComponent(codeParam)}` : '/api/markets';
+
+      let storedCodes: string[] = [];
+      try {
+        if (typeof window !== 'undefined') {
+          storedCodes = JSON.parse(localStorage.getItem('unibet_access_codes') || '[]');
+        }
+      } catch {}
+
+      const allCodes = Array.from(new Set([urlCode, extraCode, ...storedCodes].filter(Boolean))) as string[];
+      const url = allCodes.length > 0
+        ? `/api/markets?code=${encodeURIComponent(allCodes.join(','))}`
+        : '/api/markets';
+
       const response = await apiFetch<MarketsResponse>(url);
       setMarkets(response.markets);
       setMarketsError(null);
+      return response.markets;
     } catch (loadError) {
       setMarketsError(errorMessage(loadError));
+      return null;
     } finally {
       setMarketsLoading(false);
     }
   }, []);
+
+  const handleUnlockCode = async (enteredCode: string): Promise<boolean> => {
+    const cleanCode = enteredCode.trim().toUpperCase();
+    const fetchedMarkets = await loadMarkets(false, cleanCode);
+    if (!fetchedMarkets) return false;
+
+    // Buscar si alguna de las apuestas obtenidas corresponde a este código de acceso
+    const matched = fetchedMarkets.find(
+      (m) => m.accessCode?.toUpperCase() === cleanCode
+    );
+
+    if (matched) {
+      // Guardar en localStorage para mantenerla desbloqueada en esta sesión / navegador
+      try {
+        if (typeof window !== 'undefined') {
+          const stored = JSON.parse(localStorage.getItem('unibet_access_codes') || '[]');
+          if (!stored.includes(cleanCode)) {
+            localStorage.setItem('unibet_access_codes', JSON.stringify([...stored, cleanCode]));
+          }
+        }
+      } catch {}
+
+      // Enfocar y filtrar para que el usuario la vea de inmediato
+      setSearch('');
+      setVisibilityFilter('PRIVATE_CODE');
+      setStatusFilter('PLAYING');
+      setCategoryFilter('TODOS');
+      showToast(`🎯 ¡Apuesta "${matched.title}" desbloqueada!`, 'success');
+      return true;
+    }
+
+    return false;
+  };
 
   const loadBets = useCallback(async (silent = false) => {
     if (!silent) setBetsLoading(true);
@@ -799,26 +849,38 @@ export function Terminal({
               {/* Barra de Filtros y Búsqueda */}
               <div className="rounded-2xl border border-[#1e2330] bg-[#0c0d12] p-3 sm:p-4 shadow-sm space-y-3">
                 <div className="flex flex-col gap-2.5">
-                  {/* Búsqueda y Ordenamiento */}
+                  {/* Búsqueda, Código Privado y Ordenamiento */}
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
-                    <div className="relative flex-1">
-                      <Search className="pointer-events-none absolute left-3.5 top-3 h-4 w-4 text-slate-500" />
-                      <input
-                        type="search"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Buscar eventos, opciones o creador..."
-                        className="w-full rounded-xl border border-[#212633] bg-[#141822] py-2.5 pl-10 pr-8 text-base sm:text-xs font-medium text-white placeholder-slate-500 focus:border-[#00f090] focus:outline-none transition"
-                      />
-                      {search && (
-                        <button
-                          type="button"
-                          onClick={() => setSearch('')}
-                          className="absolute right-3 top-3 text-slate-400 hover:text-white"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      )}
+                    <div className="flex items-center gap-2 flex-1">
+                      <div className="relative flex-1">
+                        <Search className="pointer-events-none absolute left-3.5 top-3 h-4 w-4 text-slate-500" />
+                        <input
+                          type="search"
+                          value={search}
+                          onChange={(e) => setSearch(e.target.value)}
+                          placeholder="Buscar eventos, opciones o creador..."
+                          className="w-full rounded-xl border border-[#212633] bg-[#141822] py-2.5 pl-10 pr-8 text-base sm:text-xs font-medium text-white placeholder-slate-500 focus:border-[#00f090] focus:outline-none transition"
+                        />
+                        {search && (
+                          <button
+                            type="button"
+                            onClick={() => setSearch('')}
+                            className="absolute right-3 top-3 text-slate-400 hover:text-white"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowCodeModal(true)}
+                        className="flex items-center justify-center gap-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 px-3 sm:px-3.5 py-2.5 text-xs font-bold text-purple-300 hover:text-purple-200 hover:border-purple-500/50 transition-all active:scale-95 cursor-pointer shrink-0 shadow-sm"
+                        title="Desbloquear apuesta con código secreto"
+                      >
+                        <KeyRound className="h-3.5 w-3.5 text-purple-400" />
+                        <span>Código</span>
+                      </button>
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
@@ -1011,7 +1073,15 @@ export function Terminal({
                             : 'Sé el primero en crear una predicción entre amigos.'
                   }
                   action={
-                    visibilityFilter === 'GROUP' ? (
+                    visibilityFilter === 'PRIVATE_CODE' ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowCodeModal(true)}
+                        className="flex items-center gap-2 rounded-xl bg-purple-500 px-4 py-2.5 text-xs font-bold text-slate-950 transition hover:bg-purple-400 active:scale-95 shadow-md shadow-purple-500/20 cursor-pointer"
+                      >
+                        <KeyRound className="h-4 w-4 text-black" /> Ingresar Código Secreto
+                      </button>
+                    ) : visibilityFilter === 'GROUP' ? (
                       <button
                         type="button"
                         onClick={() => setShowGroups(true)}
@@ -1250,6 +1320,10 @@ export function Terminal({
           setDrawerOpen(false);
           setShowGroups(true);
         }}
+        onOpenCodeModal={() => {
+          setDrawerOpen(false);
+          setShowCodeModal(true);
+        }}
         onLogout={() => {
           setDrawerOpen(false);
           onLogout();
@@ -1275,6 +1349,12 @@ export function Terminal({
       ) : null}
 
       {/* Modales */}
+      <AccessCodeModal
+        isOpen={showCodeModal}
+        onClose={() => setShowCodeModal(false)}
+        onUnlock={handleUnlockCode}
+      />
+
       {showGroups ? (
         <GroupsModal
           onClose={() => setShowGroups(false)}

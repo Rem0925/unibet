@@ -43,7 +43,10 @@ export async function GET(request: NextRequest) {
 
     const supabase = getServiceSupabase();
     const searchParams = request.nextUrl.searchParams;
-    const requestedCode = searchParams.get('code')?.trim().toUpperCase();
+    const rawCodes = searchParams.get('code')?.trim().toUpperCase();
+    const requestedCodes = rawCodes
+      ? rawCodes.split(',').map((c) => c.trim()).filter(Boolean)
+      : [];
 
     // 1. Obtener membresías aprobadas del usuario y apuestas activas para filtrar visibilidad
     const [{ data: userMemberships }, { data: userBets }] = await Promise.all([
@@ -100,8 +103,8 @@ export async function GET(request: NextRequest) {
       if (vis === 'PRIVATE_CODE') {
         // Si el usuario ya apostó en él, lo ve
         if (userBetMarketIds.has(market.id)) return true;
-        // Si proporcionó el código correcto en la URL, lo ve
-        if (requestedCode && market.access_code && requestedCode === market.access_code.toUpperCase()) {
+        // Si proporcionó el código correcto, lo ve
+        if (market.access_code && requestedCodes.includes(market.access_code.toUpperCase())) {
           return true;
         }
         // Si es moderador y el mercado está cerrado o pendiente de resolución
@@ -174,7 +177,7 @@ export async function GET(request: NextRequest) {
       const canSeeAccessCode =
         market.creator_id === profile.id ||
         profile.role === 'ADMIN' ||
-        (requestedCode && market.access_code && requestedCode === market.access_code.toUpperCase());
+        (market.access_code && requestedCodes.includes(market.access_code.toUpperCase()));
 
       return {
         id: market.id,
