@@ -17,10 +17,21 @@ function buildOdds(poolsByOption: Record<string, Decimal>, totalPool: Decimal, o
     const optionPool = poolsByOption[option] ?? ZERO;
 
     if (totalPool.isZero() || optionPool.isZero()) {
+      let profitPct = '+0%';
+      if (!totalPool.isZero()) {
+        const minBet = new Decimal(0.1);
+        const projMult = totalPool.plus(minBet).dividedBy(minBet);
+        const cappedMult = projMult.gt(MULTIPLIER_CAP) ? MULTIPLIER_CAP : projMult;
+        const profit = cappedMult.minus(1).times(100);
+        profitPct = `+${profit.toFixed(0)}%`;
+      }
+
       optionsOdds[option] = {
         pool: '0.00',
         percentage: '0.0%',
         multiplier: totalPool.isZero() ? '1.00x' : '—',
+        profitPercentage: totalPool.isZero() ? '+0%' : profitPct,
+        hasBets: false,
       };
       continue;
     }
@@ -32,17 +43,22 @@ function buildOdds(poolsByOption: Record<string, Decimal>, totalPool: Decimal, o
         pool: optionPool.toFixed(2),
         percentage: '100.0%',
         multiplier: '1.00x',
+        profitPercentage: '+0%',
+        hasBets: true,
       };
       continue;
     }
 
     const rawMultiplier = totalPool.dividedBy(optionPool);
     const multiplier = rawMultiplier.gt(MULTIPLIER_CAP) ? MULTIPLIER_CAP : rawMultiplier;
+    const profit = multiplier.minus(1).times(100);
 
     optionsOdds[option] = {
       pool: optionPool.toFixed(2),
       percentage: `${percentage.toFixed(1)}%`,
       multiplier: `${multiplier.toFixed(2)}x`,
+      profitPercentage: `+${profit.toFixed(0)}%`,
+      hasBets: true,
     };
   }
 
@@ -89,6 +105,7 @@ export interface BetEstimate {
   multiplier: string;
   payout: string;
   profit: string;
+  profitPercentage: string;
   totalPool: string;
   optionPool: string;
 }
@@ -107,6 +124,7 @@ export function estimateBetPayout(params: {
       multiplier: '—',
       payout: '0.00',
       profit: '0.00',
+      profitPercentage: '+0%',
       totalPool: '0.00',
       optionPool: '0.00',
     };
@@ -119,11 +137,16 @@ export function estimateBetPayout(params: {
     multiplier = MULTIPLIER_CAP;
   }
   const payout = amount.times(multiplier);
+  const netProfit = Decimal.max(0, payout.minus(amount));
+  const profitPercentage = amount.gt(0) && multiplier.gt(1)
+    ? `+${multiplier.minus(1).times(100).toFixed(0)}%`
+    : '+0%';
 
   return {
     multiplier: `${multiplier.toFixed(2)}x`,
     payout: payout.toFixed(2),
-    profit: Decimal.max(0, payout.minus(amount)).toFixed(2),
+    profit: netProfit.toFixed(2),
+    profitPercentage,
     totalPool: projectedTotal.toFixed(2),
     optionPool: projectedOption.toFixed(2),
   };

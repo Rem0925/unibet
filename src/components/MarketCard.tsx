@@ -132,15 +132,18 @@ export function MarketCard({
           })}
         </div>
 
-        {/* Opciones con cuota estilo Sportsbook */}
+        {/* Opciones con cuota estilo Sportsbook y porcentaje de ganancia */}
         <div className="mb-3 space-y-2">
           {market.options.map((option) => {
             const optionOdds = market.odds.optionsOdds[option] ?? {
               pool: '0.00',
-              percentage: '0%',
+              percentage: '0.0%',
               multiplier: '1.00x',
+              profitPercentage: '+0%',
             };
             const isWinning = market.status === 'RESOLVED' && market.winningOption === option;
+            const hasBets = optionOdds.pool !== '0.00';
+            const profit = optionOdds.profitPercentage ?? '+0%';
 
             return (
               <button
@@ -158,12 +161,36 @@ export function MarketCard({
               >
                 <div className="min-w-0 pr-2">
                   <span className="block truncate text-xs font-semibold text-white">{option}</span>
-                  <span className="text-[10px] text-slate-400 tabular-nums">{optionOdds.percentage} del pozo</span>
+                  <div className="flex items-center gap-1.5 text-[10px] text-slate-400 tabular-nums">
+                    {hasBets ? (
+                      <>
+                        <span className="font-mono text-slate-300">${optionOdds.pool}</span>
+                        <span>·</span>
+                        <span>{optionOdds.percentage} del pozo</span>
+                      </>
+                    ) : (
+                      <span className="text-slate-500">0 apuestas · ¡Sé el primero!</span>
+                    )}
+                  </div>
                 </div>
-                <div className="shrink-0 rounded-lg bg-[#0c0d12] px-2.5 py-1 text-center border border-[#212633] group-hover:border-[#00f090]/40">
-                  <span className="font-mono text-xs font-bold text-[#00f090] tabular-nums">
-                    {optionOdds.multiplier}
-                  </span>
+                <div className="shrink-0 text-right">
+                  <div className="flex items-center justify-end gap-1.5">
+                    {hasBets && profit !== '+0%' ? (
+                      <span className="text-[10px] font-bold text-[#00f090] bg-[#00f090]/10 px-1.5 py-0.5 rounded border border-[#00f090]/25 font-mono">
+                        {profit} ganancia
+                      </span>
+                    ) : null}
+                    <div className="rounded-lg bg-[#0c0d12] px-2.5 py-1 text-center border border-[#212633] group-hover:border-[#00f090]/40">
+                      <span className={`font-mono text-xs font-bold tabular-nums ${hasBets ? 'text-[#00f090]' : 'text-slate-400'}`}>
+                        {optionOdds.multiplier !== '—' ? optionOdds.multiplier : '1.00x'}
+                      </span>
+                    </div>
+                  </div>
+                  {!hasBets && Number(market.totalPool) > 0 ? (
+                    <span className="block text-[9px] text-amber-400 font-mono font-medium mt-0.5">
+                      Gran retorno potencial
+                    </span>
+                  ) : null}
                 </div>
               </button>
             );
