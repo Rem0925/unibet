@@ -72,18 +72,27 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Acción: verify
+    // Acción: verify o manual
     const orderAmount = Number(tx.amount);
     let binanceTxId: string | null = null;
     let verifiedAmount = orderAmount;
     let payerName: string | null = null;
     let counterpartyId: string | number | null = null;
 
-    if (isBinanceConfigured()) {
+    if (action === 'verify') {
+      if (!isBinanceConfigured()) {
+        throw new ApiError(
+          'La API de Binance no está activa. Si ya viste los fondos en tu app de Binance, utiliza la opción "Aprobar manualmente".',
+          400,
+          'BINANCE_NOT_CONFIGURED'
+        );
+      }
+
+      let binanceErrorMsg: string | null = null;
       try {
         const orderCreatedAt = new Date(tx.created_at).getTime();
         const transactions = await fetchBinancePayTransactions({
-          startTime: Math.max(0, orderCreatedAt - 15 * 60 * 1000),
+          startTime: Math.max(0, orderCreatedAt - 24 * 60 * 60 * 1000),
           limit: 100,
         });
 
@@ -119,7 +128,18 @@ export async function POST(request: NextRequest) {
           counterpartyId = match.counterpartyId ?? null;
         }
       } catch (err) {
-        console.warn('[admin] No se pudo verificar con Binance SAPI, continuando con conciliación manual:', err);
+        binanceErrorMsg = err instanceof Error ? err.message : 'Error desconocido al contactar a Binance';
+        console.warn('[admin] Error al consultar Binance SAPI:', err);
+      }
+
+      if (!binanceTxId) {
+        throw new ApiError(
+          binanceErrorMsg
+            ? `Binance API: ${binanceErrorMsg}. Si confirmas haber recibido los fondos en tu app de Binance, puedes usar "Aprobar manualmente".`
+            : 'No se encontró en Binance Pay ninguna transferencia que coincida con esta orden. Si confirmas haber recibido los fondos en tu app de Binance, puedes usar "Aprobar manualmente".',
+          400,
+          'BINANCE_NOT_FOUND'
+        );
       }
     }
 
@@ -144,7 +164,7 @@ export async function POST(request: NextRequest) {
           payer_counterparty_id: counterpartyId,
           reconciled_by: profile.id,
           reconciled_at: new Date().toISOString(),
-          reconciliation_note: note ?? null,
+          reconciliation_note: note ?? (action === 'manual' ? 'Aprobado manualmente por el administrador sin confirmación de API' : 'Verificado automáticamente vía Binance Pay API'),
         },
       })
       .eq('id', tx.id);

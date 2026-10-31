@@ -261,7 +261,7 @@ export const ReconcileDepositSchema = z
       .min(6)
       .max(64)
       .regex(/^[A-Za-z0-9_-]+$/, { message: 'Referencia inválida' }),
-    action: z.enum(['verify', 'fail'], { message: 'Acción inválida' }),
+    action: z.enum(['verify', 'manual', 'fail'], { message: 'Acción inválida' }),
     binanceTxId: z
       .string()
       .trim()

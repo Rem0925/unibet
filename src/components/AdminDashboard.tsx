@@ -98,6 +98,7 @@ export function AdminDashboard({
     action: 'refund' | 'complete';
   } | null>(null);
   const [depositConfirm, setDepositConfirm] = useState<string | null>(null);
+  const [depositManualConfirm, setDepositManualConfirm] = useState<string | null>(null);
   const [banConfirm, setBanConfirm] = useState<string | null>(null);
   const [inspectingUser, setInspectingUser] = useState<UserProfile | null>(null);
 
@@ -167,7 +168,7 @@ export function AdminDashboard({
     }
   };
 
-  const reconcileDeposit = async (deposit: PendingDeposit, action: 'verify' | 'fail') => {
+  const reconcileDeposit = async (deposit: PendingDeposit, action: 'verify' | 'manual' | 'fail') => {
     const key = `dp:${deposit.referenceId}:${action}`;
     setBusyKey(key);
     try {
@@ -180,6 +181,7 @@ export function AdminDashboard({
       );
       showToast(response.message || 'Depósito reconciliado', 'success');
       setDepositConfirm(null);
+      setDepositManualConfirm(null);
       await onChanged();
     } catch (reconcileError) {
       showToast(errorMessage(reconcileError), 'error');
@@ -347,6 +349,8 @@ export function AdminDashboard({
             busyKey={busyKey}
             depositConfirm={depositConfirm}
             setDepositConfirm={setDepositConfirm}
+            depositManualConfirm={depositManualConfirm}
+            setDepositManualConfirm={setDepositManualConfirm}
             onReconcile={reconcileDeposit}
             showToast={showToast}
           />
@@ -669,6 +673,8 @@ function DepositsTab({
   busyKey,
   depositConfirm,
   setDepositConfirm,
+  depositManualConfirm,
+  setDepositManualConfirm,
   onReconcile,
   showToast,
 }: {
@@ -677,7 +683,9 @@ function DepositsTab({
   busyKey: string | null;
   depositConfirm: string | null;
   setDepositConfirm: (value: string | null) => void;
-  onReconcile: (deposit: PendingDeposit, action: 'verify' | 'fail') => void;
+  depositManualConfirm: string | null;
+  setDepositManualConfirm: (value: string | null) => void;
+  onReconcile: (deposit: PendingDeposit, action: 'verify' | 'manual' | 'fail') => void;
   showToast: (message: string, type?: 'success' | 'warn' | 'error') => void;
 }) {
   const copyToClipboard = async (text: string, label: string) => {
@@ -764,14 +772,25 @@ function DepositsTab({
                     onClick={() => onReconcile(deposit, 'verify')}
                     disabled={isBusyVerify}
                     className="flex items-center gap-1.5 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-xs font-bold text-sky-400 transition hover:bg-sky-500/20 disabled:opacity-50"
+                    title="Verifica en vivo contra la API de Binance Pay"
                   >
                     {isBusyVerify ? (
                       <Spinner className="h-3 w-3" />
                     ) : (
                       <RefreshCw className="h-3 w-3" />
                     )}
-                    <span className="sm:hidden">Verificar</span>
+                    <span className="sm:hidden">API</span>
                     <span className="hidden sm:inline">Verificar en Binance</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDepositManualConfirm(deposit.referenceId)}
+                    className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-400 transition hover:bg-emerald-500/20"
+                    title="Aprobar manualmente si viste el pago en tu app de Binance"
+                  >
+                    <CheckCircle2 className="h-3 w-3" />
+                    <span className="sm:hidden">Manual</span>
+                    <span className="hidden sm:inline">Aprobar Manual</span>
                   </button>
                   <button
                     type="button"
@@ -783,6 +802,28 @@ function DepositsTab({
                   </button>
                 </div>
               </div>
+
+              {depositManualConfirm === deposit.referenceId ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-300">
+                  <span>¿Aprobar manualmente la recarga de <strong>${formatUsdt(deposit.amount)} USDT</strong> para @{deposit.username}?</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onReconcile(deposit, 'manual')}
+                      className="rounded-lg bg-emerald-500 px-3 py-1 font-bold text-slate-950 transition hover:bg-emerald-400"
+                    >
+                      Confirmar acreditación
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDepositManualConfirm(null)}
+                      className="rounded-lg border border-[#2d3447] bg-[#161a24] px-3 py-1 text-slate-300 transition hover:bg-[#1e2330]"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : null}
 
               {isConfirming ? (
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">

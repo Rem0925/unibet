@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import type { BscFeeResponse } from './types';
 
 const SAPI_DEFAULT_BASE_URL = 'https://api.binance.com';
@@ -150,21 +151,19 @@ function signSapiQuery(params: Record<string, string | number | boolean | undefi
   return `${queryString}&signature=${signature}`;
 }
 
-let proxyAgentInstance: unknown = null;
+let proxyAgentInstance: ProxyAgent | null = null;
 
-function getProxyAgent(): unknown {
+function getProxyAgent(): ProxyAgent | undefined {
   const proxyUrl = process.env.FIXIE_URL || process.env.STATIC_PROXY_URL || process.env.HTTP_PROXY;
   if (!proxyUrl) return undefined;
   if (!proxyAgentInstance) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { ProxyAgent } = require('undici');
       proxyAgentInstance = new ProxyAgent(proxyUrl);
     } catch {
       proxyAgentInstance = null;
     }
   }
-  return proxyAgentInstance;
+  return proxyAgentInstance ?? undefined;
 }
 
 async function callBinanceSapi<T>(options: {
@@ -183,21 +182,31 @@ async function callBinanceSapi<T>(options: {
   // Si Fixie o un proxy estático está configurado, todas las llamadas autenticadas hacia Binance
   // deben salir por Fixie para coincidir con la lista de IPs autorizadas en Binance (52.87.82.133, 52.5.155.132).
   const agent = getProxyAgent();
-  const fetchOptions: RequestInit & { dispatcher?: unknown } = {
-    method: options.method,
-    headers: {
-      'X-MBX-APIKEY': config.apiKey,
-      ...(options.method === 'POST' ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
-    },
-    ...(options.method === 'POST' ? { body: signedQuery } : {}),
-    cache: 'no-store',
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    ...(agent ? { dispatcher: agent } : {}),
+  const fetchHeaders: Record<string, string> = {
+    'X-MBX-APIKEY': config.apiKey,
+    ...(options.method === 'POST' ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
   };
 
   let response: Response;
   try {
-    response = await fetch(url, fetchOptions);
+    if (agent) {
+      // Usar undiciFetch nativo para garantizar que el dispatcher del proxy estático de Fixie no sea ignorado por Next.js
+      response = (await undiciFetch(url, {
+        method: options.method,
+        headers: fetchHeaders,
+        body: options.method === 'POST' ? signedQuery : undefined,
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        dispatcher: agent,
+      })) as unknown as Response;
+    } else {
+      response = await fetch(url, {
+        method: options.method,
+        headers: fetchHeaders,
+        body: options.method === 'POST' ? signedQuery : undefined,
+        cache: 'no-store',
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error de red desconocido';
     throw new BinanceApiError(`No se pudo contactar a Binance SAPI: ${message}`, false, 'BINANCE_NETWORK');

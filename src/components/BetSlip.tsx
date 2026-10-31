@@ -126,7 +126,7 @@ export function BetSlip({
             inputMode="decimal"
             min={BET_MIN}
             max={Math.min(BET_MAX, remainingMarketCap)}
-            step="0.5"
+            step="0.1"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             className="w-full rounded-xl border border-[#212633] bg-[#090a0f] px-3.5 py-2.5 pr-14 font-mono text-base sm:text-sm font-bold text-white tabular-nums focus:border-[#00f090] focus:outline-none transition-colors"

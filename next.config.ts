@@ -53,6 +53,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ['undici'],
   cacheComponents: true,
   partialPrefetching: true,
   poweredByHeader: false,
