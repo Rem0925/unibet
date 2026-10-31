@@ -30,8 +30,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: 'Apuesta registrada con éxito',
-      betId: result.bet_id,
-      newBalance: String(result.new_balance ?? profile.balance),
+      betId: result.bet_id ?? result.betId,
+      newBalance: String(result.new_balance ?? result.newBalance ?? profile.balance),
     });
   } catch (error) {
     return jsonError(error);

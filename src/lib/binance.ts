@@ -154,7 +154,12 @@ function signSapiQuery(params: Record<string, string | number | boolean | undefi
 let proxyAgentInstance: ProxyAgent | null = null;
 
 function getProxyAgent(): ProxyAgent | undefined {
-  const proxyUrl = process.env.FIXIE_URL || process.env.STATIC_PROXY_URL || process.env.HTTP_PROXY;
+  const proxyUrl =
+    process.env.BINANCE_PROXY_URL ||
+    process.env.QUOTAGUARDSTATIC_URL ||
+    process.env.STATIC_PROXY_URL ||
+    process.env.FIXIE_URL ||
+    process.env.HTTP_PROXY;
   if (!proxyUrl) return undefined;
   if (!proxyAgentInstance) {
     try {

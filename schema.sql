@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS public.bets (
 CREATE TABLE IF NOT EXISTS public.transactions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES public.users(id),
-    type TEXT NOT NULL CONSTRAINT transactions_type_valid CHECK (type IN ('DEPOSIT', 'WITHDRAW', 'BET_PLACED', 'BET_WON', 'FEE_DEPOSIT', 'HOUSE_WIN', 'CREATOR_WIN', 'REFUND')),
+    type TEXT NOT NULL CONSTRAINT transactions_type_valid CHECK (type IN ('DEPOSIT', 'WITHDRAW', 'BET', 'BET_PLACED', 'BET_WON', 'FEE_DEPOSIT', 'HOUSE_WIN', 'CREATOR_WIN', 'REFUND')),
     amount NUMERIC(18, 4) NOT NULL CONSTRAINT transactions_amount_positive CHECK (amount > 0),
     status TEXT NOT NULL DEFAULT 'PENDING' CONSTRAINT transactions_status_valid CHECK (status IN ('PENDING', 'COMPLETED', 'FAILED')),
     reference_id TEXT UNIQUE,
@@ -167,7 +167,7 @@ ALTER TABLE public.transactions DROP CONSTRAINT IF EXISTS transactions_amount_po
 ALTER TABLE public.transactions DROP CONSTRAINT IF EXISTS transactions_type_valid;
 ALTER TABLE public.transactions DROP CONSTRAINT IF EXISTS transactions_status_valid;
 ALTER TABLE public.transactions ADD CONSTRAINT transactions_amount_positive CHECK (amount > 0);
-ALTER TABLE public.transactions ADD CONSTRAINT transactions_type_valid CHECK (type IN ('DEPOSIT', 'WITHDRAW', 'BET_PLACED', 'BET_WON', 'FEE_DEPOSIT', 'HOUSE_WIN', 'CREATOR_WIN', 'REFUND'));
+ALTER TABLE public.transactions ADD CONSTRAINT transactions_type_valid CHECK (type IN ('DEPOSIT', 'WITHDRAW', 'BET', 'BET_PLACED', 'BET_WON', 'FEE_DEPOSIT', 'HOUSE_WIN', 'CREATOR_WIN', 'REFUND'));
 ALTER TABLE public.transactions ADD CONSTRAINT transactions_status_valid CHECK (status IN ('PENDING', 'COMPLETED', 'FAILED'));
 
 DO $$
@@ -489,12 +489,14 @@ END;
 $$;
 
 DROP FUNCTION IF EXISTS public.fn_place_bet(UUID, UUID, TEXT, NUMERIC);
+DROP FUNCTION IF EXISTS public.fn_place_bet(UUID, UUID, TEXT, NUMERIC, TEXT);
 
 CREATE OR REPLACE FUNCTION public.fn_place_bet(
     p_user_id UUID,
     p_market_id UUID,
     p_option TEXT,
-    p_amount NUMERIC(18, 4)
+    p_amount NUMERIC(18, 4),
+    p_access_code TEXT DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -541,6 +543,29 @@ BEGIN
         RAISE EXCEPTION 'La opción seleccionada no existe en este mercado';
     END IF;
 
+    -- Validar VISIBILIDAD DE GRUPO
+    IF v_market.visibility = 'GROUP' AND v_market.group_id IS NOT NULL THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM public.group_members
+            WHERE group_id = v_market.group_id
+              AND user_id = p_user_id
+              AND status = 'APPROVED'
+        ) THEN
+            RAISE EXCEPTION 'Esta apuesta es privada para miembros aprobados del grupo';
+        END IF;
+    END IF;
+
+    -- Validar VISIBILIDAD POR CÓDIGO
+    IF v_market.visibility = 'PRIVATE_CODE' AND v_market.access_code IS NOT NULL THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM public.bets WHERE market_id = p_market_id AND user_id = p_user_id
+        ) THEN
+            IF p_access_code IS NULL OR upper(trim(p_access_code)) <> upper(trim(v_market.access_code)) THEN
+                RAISE EXCEPTION 'Código de acceso privado incorrecto o requerido';
+            END IF;
+        END IF;
+    END IF;
+
     SELECT * INTO v_user
     FROM public.users
     WHERE id = p_user_id
@@ -568,34 +593,63 @@ BEGIN
         RAISE EXCEPTION 'Tope de 150 USDT apostados por usuario en este mercado (ya llevas %s)', v_user_market_total;
     END IF;
 
+    v_new_balance := v_user.balance - p_amount;
+
     UPDATE public.users
-    SET balance = balance - p_amount,
+    SET balance = v_new_balance,
         updated_at = timezone('utc'::text, now())
     WHERE id = p_user_id;
-
-    INSERT INTO public.bets (market_id, user_id, selected_option, amount, status)
-    VALUES (p_market_id, p_user_id, p_option, p_amount, 'ACTIVE')
-    RETURNING id INTO v_bet_id;
 
     UPDATE public.markets
     SET total_pool = total_pool + p_amount
     WHERE id = p_market_id;
 
-    INSERT INTO public.transactions (user_id, type, amount, status, metadata)
+    INSERT INTO public.bets (
+        market_id,
+        user_id,
+        selected_option,
+        amount,
+        status
+    )
+    VALUES (
+        p_market_id,
+        p_user_id,
+        p_option,
+        p_amount,
+        'ACTIVE'
+    )
+    RETURNING id INTO v_bet_id;
+
+    INSERT INTO public.transactions (
+        user_id,
+        type,
+        amount,
+        status,
+        metadata
+    )
     VALUES (
         p_user_id,
         'BET_PLACED',
         p_amount,
         'COMPLETED',
-        jsonb_build_object('market_id', p_market_id, 'bet_id', v_bet_id, 'option', p_option)
+        jsonb_build_object(
+            'bet_id', v_bet_id,
+            'betId', v_bet_id,
+            'market_id', p_market_id,
+            'marketId', p_market_id,
+            'option', p_option,
+            'marketTitle', v_market.title
+        )
     );
-
-    SELECT balance INTO v_new_balance FROM public.users WHERE id = p_user_id;
 
     RETURN jsonb_build_object(
         'success', true,
         'bet_id', v_bet_id,
-        'new_balance', v_new_balance
+        'betId', v_bet_id,
+        'new_balance', v_new_balance,
+        'newBalance', v_new_balance,
+        'total_pool', v_market.total_pool + p_amount,
+        'totalPool', v_market.total_pool + p_amount
     );
 END;
 $$;
@@ -1971,164 +2025,7 @@ BEGIN
 END;
 $$;
 
--- 7. Actualizar fn_place_bet para validar permisos en mercados GROUP y PRIVATE_CODE
-CREATE OR REPLACE FUNCTION public.fn_place_bet(
-    p_user_id UUID,
-    p_market_id UUID,
-    p_option TEXT,
-    p_amount NUMERIC(18, 4),
-    p_access_code TEXT DEFAULT NULL
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, pg_temp
-AS $$
-DECLARE
-    v_market RECORD;
-    v_user RECORD;
-    v_bet_id UUID;
-    v_new_balance NUMERIC(18, 4);
-    v_user_market_total NUMERIC(18, 4);
-BEGIN
-    IF p_amount IS NULL OR p_amount < 0.2000 OR p_amount > 500.0000 THEN
-        RAISE EXCEPTION 'El monto debe estar entre 0.20 y 500.00 USDT';
-    END IF;
 
-    IF p_option IS NULL OR char_length(trim(p_option)) = 0 THEN
-        RAISE EXCEPTION 'Debes seleccionar una opción';
-    END IF;
-
-    SELECT * INTO v_market
-    FROM public.markets
-    WHERE id = p_market_id
-    FOR UPDATE;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'Mercado no encontrado';
-    END IF;
-
-    IF v_market.status <> 'OPEN' THEN
-        RAISE EXCEPTION 'El mercado no está abierto';
-    END IF;
-
-    IF v_market.close_time <= timezone('utc'::text, now()) THEN
-        RAISE EXCEPTION 'El tiempo para apostar ya expiró';
-    END IF;
-
-    IF NOT EXISTS (
-        SELECT 1
-        FROM jsonb_array_elements_text(v_market.options) AS elem(value)
-        WHERE elem.value = p_option
-    ) THEN
-        RAISE EXCEPTION 'La opción seleccionada no existe en este mercado';
-    END IF;
-
-    -- Validar VISIBILIDAD DE GRUPO
-    IF v_market.visibility = 'GROUP' AND v_market.group_id IS NOT NULL THEN
-        IF NOT EXISTS (
-            SELECT 1 FROM public.group_members
-            WHERE group_id = v_market.group_id
-              AND user_id = p_user_id
-              AND status = 'APPROVED'
-        ) THEN
-            RAISE EXCEPTION 'Esta apuesta es privada para miembros aprobados del grupo';
-        END IF;
-    END IF;
-
-    -- Validar VISIBILIDAD POR CÓDIGO
-    IF v_market.visibility = 'PRIVATE_CODE' AND v_market.access_code IS NOT NULL THEN
-        -- Si el usuario ya tiene una apuesta previa en este mercado, se considera autorizado
-        IF NOT EXISTS (
-            SELECT 1 FROM public.bets WHERE market_id = p_market_id AND user_id = p_user_id
-        ) THEN
-            IF p_access_code IS NULL OR upper(trim(p_access_code)) <> upper(trim(v_market.access_code)) THEN
-                RAISE EXCEPTION 'Código de acceso privado incorrecto o requerido';
-            END IF;
-        END IF;
-    END IF;
-
-    SELECT * INTO v_user
-    FROM public.users
-    WHERE id = p_user_id
-    FOR UPDATE;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'Usuario no encontrado';
-    END IF;
-
-    IF v_user.is_banned THEN
-        RAISE EXCEPTION 'Esta cuenta se encuentra suspendida';
-    END IF;
-
-    IF v_user.balance < p_amount THEN
-        RAISE EXCEPTION 'Saldo insuficiente en tu billetera';
-    END IF;
-
-    SELECT COALESCE(SUM(amount), 0) INTO v_user_market_total
-    FROM public.bets
-    WHERE market_id = p_market_id
-      AND user_id = p_user_id
-      AND status = 'ACTIVE';
-
-    IF v_user_market_total + p_amount > 150.0000 THEN
-        RAISE EXCEPTION 'Tope de 150 USDT apostados por usuario en este mercado (ya llevas %s)', v_user_market_total;
-    END IF;
-
-    v_new_balance := v_user.balance - p_amount;
-
-    UPDATE public.users
-    SET balance = v_new_balance
-    WHERE id = p_user_id;
-
-    UPDATE public.markets
-    SET total_pool = total_pool + p_amount
-    WHERE id = p_market_id;
-
-    INSERT INTO public.bets (
-        market_id,
-        user_id,
-        selected_option,
-        amount,
-        status
-    )
-    VALUES (
-        p_market_id,
-        p_user_id,
-        p_option,
-        p_amount,
-        'ACTIVE'
-    )
-    RETURNING id INTO v_bet_id;
-
-    INSERT INTO public.transactions (
-        user_id,
-        type,
-        amount,
-        status,
-        metadata
-    )
-    VALUES (
-        p_user_id,
-        'BET',
-        p_amount,
-        'COMPLETED',
-        jsonb_build_object(
-            'betId', v_bet_id,
-            'marketId', p_market_id,
-            'option', p_option,
-            'marketTitle', v_market.title
-        )
-    );
-
-    RETURN jsonb_build_object(
-        'success', true,
-        'betId', v_bet_id,
-        'newBalance', v_new_balance,
-        'totalPool', v_market.total_pool + p_amount
-    );
-END;
-$$;
 
 -- RLS y permisos
 ALTER TABLE public.groups ENABLE ROW LEVEL SECURITY;
