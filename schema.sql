@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS public.bets (
     market_id UUID NOT NULL REFERENCES public.markets(id),
     user_id UUID NOT NULL REFERENCES public.users(id),
     selected_option TEXT NOT NULL,
-    amount NUMERIC(18, 4) NOT NULL CONSTRAINT bets_amount_range CHECK (amount >= 0.2 AND amount <= 500),
+    amount NUMERIC(18, 4) NOT NULL CONSTRAINT bets_amount_range CHECK (amount >= 0.1 AND amount <= 500),
     payout_amount NUMERIC(18, 4) NOT NULL DEFAULT 0.0000 CONSTRAINT bets_payout_non_negative CHECK (payout_amount >= 0),
     status TEXT NOT NULL DEFAULT 'ACTIVE' CONSTRAINT bets_status_valid CHECK (status IN ('ACTIVE', 'WON', 'LOST', 'REFUNDED')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -156,7 +156,7 @@ ALTER TABLE public.bets DROP CONSTRAINT IF EXISTS bets_status_check;
 ALTER TABLE public.bets DROP CONSTRAINT IF EXISTS bets_amount_range;
 ALTER TABLE public.bets DROP CONSTRAINT IF EXISTS bets_payout_non_negative;
 ALTER TABLE public.bets DROP CONSTRAINT IF EXISTS bets_status_valid;
-ALTER TABLE public.bets ADD CONSTRAINT bets_amount_range CHECK (amount >= 0.2 AND amount <= 500);
+ALTER TABLE public.bets ADD CONSTRAINT bets_amount_range CHECK (amount >= 0.1 AND amount <= 500);
 ALTER TABLE public.bets ADD CONSTRAINT bets_payout_non_negative CHECK (payout_amount >= 0);
 ALTER TABLE public.bets ADD CONSTRAINT bets_status_valid CHECK (status IN ('ACTIVE', 'WON', 'LOST', 'REFUNDED'));
 
@@ -510,8 +510,8 @@ DECLARE
     v_new_balance NUMERIC(18, 4);
     v_user_market_total NUMERIC(18, 4);
 BEGIN
-    IF p_amount IS NULL OR p_amount < 0.2000 OR p_amount > 500.0000 THEN
-        RAISE EXCEPTION 'El monto debe estar entre 0.20 y 500.00 USDT';
+    IF p_amount IS NULL OR p_amount < 0.1000 OR p_amount > 500.0000 THEN
+        RAISE EXCEPTION 'El monto debe estar entre 0.10 y 500.00 USDT';
     END IF;
 
     IF p_option IS NULL OR char_length(trim(p_option)) = 0 THEN

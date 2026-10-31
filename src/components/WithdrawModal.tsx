@@ -247,50 +247,52 @@ export function WithdrawModal({
   return (
     <Modal
       title="Retirar fondos"
-      subtitle="Elige tu método de retiro preferido."
+      subtitle="Retiro directo a tu cuenta de Binance Pay (0% Comisión)."
       icon={<ArrowUpRight className="h-5 w-5 text-[#00f090]" />}
       onClose={onClose}
     >
       <form onSubmit={submit} className="space-y-4">
-        {/* Pestañas de método */}
-        <div className="grid grid-cols-2 gap-2 rounded-xl bg-[#090a0f] p-1 border border-[#1e2330]">
-          <button
-            type="button"
-            onClick={() => {
-              setMethod('BINANCE_PAY');
-              setError(null);
-            }}
-            className={`flex flex-col items-center justify-center py-2 px-3 rounded-lg text-xs font-bold transition ${
-              method === 'BINANCE_PAY'
-                ? 'bg-[#1e2330] text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <div className="flex items-center gap-1.5">
-              <span>Binance Pay</span>
-            </div>
-            <span className="text-[10px] text-[#00f090] font-mono mt-0.5">0% Comisión</span>
-          </button>
+        {/* Selector de método (Express BEP-20 oculto temporalmente para mantener solo Binance Pay) */}
+        {false && (
+          <div className="grid grid-cols-2 gap-2 rounded-xl bg-[#090a0f] p-1 border border-[#1e2330]">
+            <button
+              type="button"
+              onClick={() => {
+                setMethod('BINANCE_PAY');
+                setError(null);
+              }}
+              className={`flex flex-col items-center justify-center py-2 px-3 rounded-lg text-xs font-bold transition ${
+                method === 'BINANCE_PAY'
+                  ? 'bg-[#1e2330] text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <span>Binance Pay</span>
+              </div>
+              <span className="text-[10px] text-[#00f090] font-mono mt-0.5">0% Comisión</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setMethod('BEP20');
-              setError(null);
-            }}
-            className={`flex flex-col items-center justify-center py-2 px-3 rounded-lg text-xs font-bold transition ${
-              method === 'BEP20'
-                ? 'bg-[#1e2330] text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <div className="flex items-center gap-1.5">
-              <Zap className="h-3 w-3 text-amber-400" />
-              <span>Express BEP-20</span>
-            </div>
-            <span className="text-[10px] text-amber-400 font-mono mt-0.5">Automático</span>
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={() => {
+                setMethod('BEP20');
+                setError(null);
+              }}
+              className={`flex flex-col items-center justify-center py-2 px-3 rounded-lg text-xs font-bold transition ${
+                method === 'BEP20'
+                  ? 'bg-[#1e2330] text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <Zap className="h-3 w-3 text-amber-400" />
+                <span>Express BEP-20</span>
+              </div>
+              <span className="text-[10px] text-amber-400 font-mono mt-0.5">Automático</span>
+            </button>
+          </div>
+        )}
 
         {/* Saldo disponible */}
         <div className="flex items-center justify-between rounded-xl border border-[#1e2330] bg-[#141822]/60 p-3">

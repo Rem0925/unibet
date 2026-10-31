@@ -1,4 +1,4 @@
-export const BET_MIN = 0.2;
+export const BET_MIN = 0.1;
 export const BET_MAX = 500;
 export const BET_USER_MARKET_MAX = 150;
 export const DEPOSIT_MIN = 0.01;
