@@ -773,59 +773,22 @@ export function Terminal({
                     </div>
                   </div>
 
-                  {/* Cuotas de apuesta directa del destacado con desglose de ganancia y pozo */}
+                  {/* Cuotas de apuesta directa del destacado */}
                   <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
                     {featuredMarket.options.map((opt) => {
                       const odds = featuredMarket.odds.optionsOdds[opt];
-                      const hasBets = odds && odds.pool !== '0.00';
-                      const multiplier = odds?.multiplier ?? '1.00x';
-                      const profit = odds?.profitPercentage ?? '+0%';
-
+                      const mult = odds?.multiplier && odds.multiplier !== '—' ? odds.multiplier : '1.00x';
                       return (
                         <button
                           key={opt}
                           type="button"
                           onClick={() => openBetSlip(featuredMarket, opt)}
-                          className="group flex items-center justify-between rounded-2xl border border-[#212633] bg-[#0c0d12]/95 p-3 text-left transition hover:border-[#00f090] hover:bg-[#141822] active:scale-[0.99] shadow-sm"
+                          className="flex items-center justify-between rounded-2xl border border-white/10 bg-[#0c0d12]/90 p-3 text-left transition hover:border-[#00f090] hover:bg-[#141822] hover:shadow-lg active:scale-[0.99]"
                         >
-                          <div className="min-w-0 pr-2">
-                            <span className="block truncate text-xs font-bold text-white group-hover:text-[#00f090] transition-colors">
-                              {opt}
-                            </span>
-                            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 tabular-nums mt-0.5">
-                              {hasBets ? (
-                                <>
-                                  <span className="font-mono text-slate-300">${odds.pool}</span>
-                                  <span>·</span>
-                                  <span className="text-slate-400">{odds.percentage} del pozo</span>
-                                </>
-                              ) : (
-                                <span className="text-slate-500">0 apuestas · ¡Sé el primero!</span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="shrink-0 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              {hasBets && profit !== '+0%' ? (
-                                <span className="text-[10px] font-bold text-[#00f090] bg-[#00f090]/10 px-1.5 py-0.5 rounded border border-[#00f090]/25 font-mono">
-                                  {profit} ganancia
-                                </span>
-                              ) : null}
-                              <span className={`font-mono text-xs font-bold px-2.5 py-1 rounded-xl border ${
-                                hasBets
-                                  ? 'text-[#00f090] bg-[#121620] border-[#00f090]/30'
-                                  : 'text-slate-400 bg-[#121620] border-[#212633]'
-                              }`}>
-                                {multiplier !== '—' ? multiplier : '1.00x'}
-                              </span>
-                            </div>
-                            {!hasBets && Number(featuredMarket.totalPool) > 0 ? (
-                              <span className="block text-[9px] text-amber-400 font-mono font-medium mt-0.5">
-                                Gran retorno potencial
-                              </span>
-                            ) : null}
-                          </div>
+                          <span className="text-xs font-bold text-white truncate pr-2">{opt}</span>
+                          <span className="font-mono text-xs font-bold text-[#00f090] bg-[#00f090]/10 px-2.5 py-1 rounded-xl">
+                            {mult}
+                          </span>
                         </button>
                       );
                     })}

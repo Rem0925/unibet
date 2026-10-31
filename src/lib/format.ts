@@ -55,6 +55,7 @@ export function timeUntil(value: string, nowMs = Date.now()): string {
   if (diff <= 0) return 'Cerrado';
 
   const minutes = Math.floor(diff / 60_000);
+  if (minutes <= 0) return 'Cierra en < 1 min';
   if (minutes < 60) return `Cierra en ${minutes} min`;
 
   const hours = Math.floor(minutes / 60);

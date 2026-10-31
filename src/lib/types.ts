@@ -43,8 +43,6 @@ export interface OptionOdds {
   pool: string;
   percentage: string;
   multiplier: string;
-  profitPercentage?: string;
-  hasBets?: boolean;
 }
 
 export interface MarketOdds {

@@ -17,21 +17,10 @@ function buildOdds(poolsByOption: Record<string, Decimal>, totalPool: Decimal, o
     const optionPool = poolsByOption[option] ?? ZERO;
 
     if (totalPool.isZero() || optionPool.isZero()) {
-      let profitPct = '+0%';
-      if (!totalPool.isZero()) {
-        const minBet = new Decimal(0.1);
-        const projMult = totalPool.plus(minBet).dividedBy(minBet);
-        const cappedMult = projMult.gt(MULTIPLIER_CAP) ? MULTIPLIER_CAP : projMult;
-        const profit = cappedMult.minus(1).times(100);
-        profitPct = `+${profit.toFixed(0)}%`;
-      }
-
       optionsOdds[option] = {
         pool: '0.00',
         percentage: '0.0%',
-        multiplier: totalPool.isZero() ? '1.00x' : '—',
-        profitPercentage: totalPool.isZero() ? '+0%' : profitPct,
-        hasBets: false,
+        multiplier: '1.00x',
       };
       continue;
     }
@@ -43,22 +32,17 @@ function buildOdds(poolsByOption: Record<string, Decimal>, totalPool: Decimal, o
         pool: optionPool.toFixed(2),
         percentage: '100.0%',
         multiplier: '1.00x',
-        profitPercentage: '+0%',
-        hasBets: true,
       };
       continue;
     }
 
     const rawMultiplier = totalPool.dividedBy(optionPool);
     const multiplier = rawMultiplier.gt(MULTIPLIER_CAP) ? MULTIPLIER_CAP : rawMultiplier;
-    const profit = multiplier.minus(1).times(100);
 
     optionsOdds[option] = {
       pool: optionPool.toFixed(2),
       percentage: `${percentage.toFixed(1)}%`,
       multiplier: `${multiplier.toFixed(2)}x`,
-      profitPercentage: `+${profit.toFixed(0)}%`,
-      hasBets: true,
     };
   }
 

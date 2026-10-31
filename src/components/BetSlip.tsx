@@ -180,10 +180,6 @@ export function BetSlip({
           <span>Retorno neto:</span>
           <span className="font-mono text-slate-300 tabular-nums">+${estimate.profit} USDT</span>
         </div>
-        <div className="flex justify-between text-[11px] border-t border-[#1e2330]/60 pt-1 text-slate-400">
-          <span>Rendimiento / Ganancia:</span>
-          <span className="font-mono font-bold text-[#00f090] tabular-nums">{estimate.profitPercentage}</span>
-        </div>
       </div>
 
       {validationError ? (
