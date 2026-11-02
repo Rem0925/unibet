@@ -932,20 +932,20 @@ function UsersTab({
           const confirmingBan = banConfirm === user.id;
 
           return (
-            <div key={user.id} className="py-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+            <div key={user.id} className="py-3.5 sm:py-3 border-b border-[#1e2330] last:border-b-0">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
                 {/* Clic en usuario abre la inspección */}
                 <button
                   type="button"
                   onClick={() => onInspectUser(user)}
-                  className="flex min-w-0 flex-1 items-center gap-3 text-left transition hover:opacity-80"
+                  className="flex w-full sm:w-auto sm:flex-1 sm:min-w-0 items-start sm:items-center gap-3 text-left transition hover:opacity-80"
                 >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 text-xs font-bold text-[#00f090] ring-1 ring-[#00f090]/30">
+                  <div className="flex h-10 w-10 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 text-xs font-bold text-[#00f090] ring-1 ring-[#00f090]/30 mt-0.5 sm:mt-0">
                     {user.username.slice(0, 2).toUpperCase()}
                   </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-xs font-bold text-white">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                      <span className="truncate text-xs font-bold text-white max-w-[170px] sm:max-w-none">
                         @{user.username}
                       </span>
                       <span
@@ -959,23 +959,39 @@ function UsersTab({
                         </span>
                       ) : null}
                     </div>
-                    <div className="mt-0.5 truncate text-xs text-slate-400">
+
+                    {/* Versión PC: intacta en una sola línea */}
+                    <div className="hidden sm:block mt-0.5 truncate text-xs text-slate-400">
                       {user.email} · <span className="font-mono text-white font-semibold">${formatUsdt(user.balance)} USDT</span>
                       {user.binanceUid ? ` · UID: ${user.binanceUid}` : ''}
+                    </div>
+
+                    {/* Versión Teléfono: desglosada y legible sin recortarse */}
+                    <div className="sm:hidden mt-0.5 text-xs text-slate-400 space-y-0.5">
+                      <div className="truncate text-slate-400 font-normal">{user.email}</div>
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                        <span className="text-slate-500">Saldo:</span>
+                        <span className="font-mono font-bold text-[#00f090]">${formatUsdt(user.balance)} USDT</span>
+                        {user.binanceUid ? (
+                          <>
+                            <span className="text-slate-600">·</span>
+                            <span className="font-mono text-slate-400">UID: {user.binanceUid}</span>
+                          </>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 </button>
 
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex items-center gap-2 w-full sm:w-auto sm:shrink-0 justify-between sm:justify-end">
                   {/* Botón para ver movimientos */}
                   <button
                     type="button"
                     onClick={() => onInspectUser(user)}
-                    className="flex items-center gap-1.5 rounded-xl border border-[#2d3447] bg-[#161a24] px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-[#1e2330] hover:text-white"
+                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 rounded-xl border border-[#2d3447] bg-[#161a24] px-2.5 sm:px-3 py-2 sm:py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-[#1e2330] hover:text-white active:scale-95"
                   >
-                    <Eye className="h-3.5 w-3.5 text-[#00f090]" />
-                    <span className="sm:hidden">Ver</span>
-                    <span className="hidden sm:inline">Movimientos</span>
+                    <Eye className="h-3.5 w-3.5 text-[#00f090] shrink-0" />
+                    <span>Movimientos</span>
                   </button>
 
                   <select
@@ -985,7 +1001,7 @@ function UsersTab({
                       onUpdate(user, { role: event.target.value as Role })
                     }
                     aria-label={`Rol de ${user.username}`}
-                    className="rounded-xl border border-[#212633] bg-[#141822] px-2.5 py-1.5 text-xs font-semibold text-slate-200 focus:border-[#00f090] focus:outline-none disabled:opacity-50 cursor-pointer"
+                    className="flex-1 sm:flex-initial rounded-xl border border-[#212633] bg-[#141822] px-2 sm:px-2.5 py-2 sm:py-1.5 text-xs font-semibold text-slate-200 focus:border-[#00f090] focus:outline-none disabled:opacity-50 cursor-pointer text-center sm:text-left active:scale-95"
                   >
                     <option value="USER">Apostador</option>
                     <option value="MODERATOR">Moderador</option>
@@ -993,7 +1009,7 @@ function UsersTab({
                   </select>
 
                   {isSelf ? (
-                    <span className="rounded-xl border border-[#2a3142] bg-[#181c26] px-2.5 py-1.5 text-xs font-semibold text-slate-400">
+                    <span className="flex-1 sm:flex-initial flex items-center justify-center rounded-xl border border-[#2a3142] bg-[#181c26] px-2.5 sm:px-2.5 py-2 sm:py-1.5 text-xs font-semibold text-slate-400">
                       TÚ
                     </span>
                   ) : (
@@ -1001,7 +1017,7 @@ function UsersTab({
                       type="button"
                       onClick={() => setBanConfirm(confirmingBan ? null : user.id)}
                       disabled={busy}
-                      className={`flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition disabled:opacity-50 ${
+                      className={`flex-1 sm:flex-initial flex items-center justify-center gap-1 rounded-xl border px-2 sm:px-2.5 py-2 sm:py-1.5 text-xs font-semibold transition disabled:opacity-50 active:scale-95 ${
                         user.isBanned
                           ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
                           : 'border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20'
@@ -1010,37 +1026,37 @@ function UsersTab({
                       {busy ? (
                         <Spinner className="h-3 w-3" />
                       ) : user.isBanned ? (
-                        <UserCog className="h-3.5 w-3.5" />
+                        <UserCog className="h-3.5 w-3.5 shrink-0" />
                       ) : (
-                        <Ban className="h-3.5 w-3.5" />
+                        <Ban className="h-3.5 w-3.5 shrink-0" />
                       )}
-                      {user.isBanned ? 'Reactivar' : 'Suspender'}
+                      <span className="truncate">{user.isBanned ? 'Reactivar' : 'Suspender'}</span>
                     </button>
                   )}
                 </div>
               </div>
 
               {confirmingBan ? (
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300">
+                <div className="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300">
                   <span>
                     {user.isBanned
                       ? `¿Reactivar la cuenta de @${user.username}?`
                       : `¿Suspender a @${user.username}? No podrá apostar, recargar ni retirar.`}
                   </span>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onUpdate(user, { isBanned: !user.isBanned })}
-                      className="rounded-lg bg-amber-500 px-3 py-1 font-bold text-slate-950 transition hover:bg-amber-400"
-                    >
-                      Confirmar
-                    </button>
+                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                     <button
                       type="button"
                       onClick={() => setBanConfirm(null)}
-                      className="rounded-lg border border-[#2d3447] bg-[#161a24] px-3 py-1 text-slate-300 transition hover:bg-[#1e2330]"
+                      className="flex-1 sm:flex-none rounded-lg border border-[#2d3447] bg-[#161a24] px-3 py-1.5 sm:py-1 text-center text-slate-300 transition hover:bg-[#1e2330]"
                     >
                       Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onUpdate(user, { isBanned: !user.isBanned })}
+                      className="flex-1 sm:flex-none rounded-lg bg-amber-500 px-3 py-1.5 sm:py-1 text-center font-bold text-slate-950 transition hover:bg-amber-400"
+                    >
+                      Confirmar
                     </button>
                   </div>
                 </div>
