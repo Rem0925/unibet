@@ -6,7 +6,6 @@ import {
   ChevronDown,
   ChevronRight,
   Flame,
-  KeyRound,
   Layers,
   LogOut,
   Plus,
@@ -441,7 +440,6 @@ export function MenuDrawer({
   onNavigate,
   onDeposit,
   onOpenGroups,
-  onOpenCodeModal,
   onLogout,
 }: {
   open: boolean;
@@ -451,7 +449,6 @@ export function MenuDrawer({
   onNavigate: (tab: AppTab) => void;
   onDeposit: () => void;
   onOpenGroups: () => void;
-  onOpenCodeModal?: () => void;
   onLogout: () => void;
 }) {
   const isStaff = profile.role === 'ADMIN' || profile.role === 'MODERATOR';
@@ -619,23 +616,6 @@ export function MenuDrawer({
             </div>
             <ChevronRight className="h-3.5 w-3.5 text-slate-500" />
           </button>
-
-          {onOpenCodeModal && (
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onOpenCodeModal();
-              }}
-              className="flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-xs font-semibold text-purple-300 hover:bg-purple-500/10 hover:text-purple-200 transition cursor-pointer active:scale-95"
-            >
-              <div className="flex items-center gap-3">
-                <KeyRound className="h-4 w-4 text-purple-400" />
-                <span>Canjear Código de Apuesta</span>
-              </div>
-              <ChevronRight className="h-3.5 w-3.5 text-purple-400/50" />
-            </button>
-          )}
 
           <button
             type="button"

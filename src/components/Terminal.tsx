@@ -1320,10 +1320,6 @@ export function Terminal({
           setDrawerOpen(false);
           setShowGroups(true);
         }}
-        onOpenCodeModal={() => {
-          setDrawerOpen(false);
-          setShowCodeModal(true);
-        }}
         onLogout={() => {
           setDrawerOpen(false);
           onLogout();
